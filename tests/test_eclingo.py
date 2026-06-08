@@ -66,57 +66,47 @@ class TestEclingoGround(TestCase):
         )  # this failed in eclingo
         self.assert_models(solve("b :- &k{ not not a }. c :- &k{ b }."), [[]])
         self.assert_models(
-            solve(
-                """
+            solve("""
             a :- not c.
             c :- not a.
             b :- &k{ a }.
             :- b.
-            """
-            ),
+            """),
             [[]],
         )
         self.assert_models(
-            solve(
-                """
+            solve("""
             a :- not c.
             c :- not a.
             b :- &k{ not a }.
             :- b.
-            """
-            ),
+            """),
             [["&m{a}"]],
         )
         self.assert_models(
-            solve(
-                """
+            solve("""
             a :- not c.
             c :- not a.
             b :- not &k{ not a }.
             d :- &k{ b }.
-            """
-            ),
+            """),
             [["&k{b}", "&m{a}"]],
         )
         self.assert_models(
-            solve(
-                """
+            solve("""
             a, c.
             b :- not &k{ not a }.
             d :- &k{ b }.
-            """
-            ),
+            """),
             [["&k{b}", "&m{a}"]],
         )
         self.assert_models(
-            solve(
-                """
+            solve("""
             p, q.
             r :- p.
             r :- q.
             s :- &k{ r }.
-            """
-            ),
+            """),
             [["&k{r}"]],
         )
 
@@ -164,65 +154,55 @@ class TestEclingoNonGround(TestCase):
             solve("b :- &k{ not not a(X) }, dom(X). dom(1..2). c :- &k{ b }."), [[]]
         )
         self.assert_models(
-            solve(
-                """
+            solve("""
             a(1) :- not c(1).
             c(1) :- not a(1).
             b(X) :- &k{ a(X) }, dom(X).
             :- b(X), dom(X).
             dom(1..2).
-            """
-            ),
+            """),
             [[]],
         )
         self.assert_models(
-            solve(
-                """
+            solve("""
             a(1) :- not c(1).
             c(1) :- not a(1).
             b(X) :- &k{ not a(X) }, dom(X).
             dom(1..2).
             :- b(1).
             :- not b(2).
-            """
-            ),
+            """),
             [["&m{a(1)}"]],
         )
         self.assert_models(
-            solve(
-                """
+            solve("""
             a(1) :- not c(1).
             c(1) :- not a(1).
             b(X) :- not &k{ not a(X) }, dom(X).
             dom(1..2).
             d(X) :- &k{ b(X) }.
-            """
-            ),
+            """),
             [["&m{a(1)}", "&k{b(1)}"]],
         )
         self.assert_models(
-            solve(
-                """
+            solve("""
             a(1), c(1).
             b(X) :- not &k{ not a(X) }, dom(X).
             dom(1..2).
             d(X) :- &k{ b(X) }.
-            """
-            ),
+            """),
             [["&m{a(1)}", "&k{b(1)}"]],
         )
 
     def test_grounding_simplifications(self):
         self.assert_models(
-            solve(
-                """
+            solve("""
             dom(1..2).
             :- &k{ a(X) }, not a(X), dom(X).
             a(1).
             {a(2)}.
             :- {a(2)} = 0.
-            """
-            ),
+            """),
             [["&k{a(1)}", "&k{a(2)}"]],
         )
 
@@ -230,38 +210,32 @@ class TestEclingoNonGround(TestCase):
 class TestEclingoAggregates(TestCase):
     def test_ground_programs(self):
         self.assert_models(
-            solve(
-                """
+            solve("""
             a.
             b :- a.
             c :- &k{b}.
             d :- &k{c}.
-            """
-            ),
+            """),
             [["&k{b}", "&k{c}"]],
         )
 
         self.assert_models(
-            solve(
-                """
+            solve("""
             a.
             b :- #count{a} >= 1.
             c :- &k{b}.
             d :- &k{c}.
-            """
-            ),
+            """),
             [["&k{b}", "&k{c}"]],
         )
 
         self.assert_models(
-            solve(
-                """
+            solve("""
             a :- not &k{ not a}.
             b :- a.
             c :- &k{b}.
             d :- &k{c}.
-            """
-            ),
+            """),
             [[], ["&m{a}", "&k{b}", "&k{c}"]],
         )
 
@@ -325,24 +299,20 @@ class TestEclingoCommontTo_G11_FAEEL(TestCase):  # pylint: disable=invalid-name
 class TestEclingoUnfounded(TestCase):  # pylint: disable=invalid-name
     def test_ground_programs(self):
         self.assert_models(
-            solve(
-                """
+            solve("""
             a, b.
             a :- &k{b}.
             b :- &k{a}.
-        """
-            ),
+        """),
             [[], ["&k{a}", "&k{b}"]],
         )
         self.assert_models(
-            solve(
-                """
+            solve("""
             {a}.
             b :- a.
             c :- not a.
             c :- &k{b}.
             b :- &k{c}.
-        """
-            ),
+        """),
             [[], ["&k{b}", "&k{c}"]],
         )

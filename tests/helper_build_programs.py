@@ -108,7 +108,7 @@ def build_assumptions(assumptions: str) -> Assumptions:
 
 
 def build_candidate(
-    candidate: Union[str, Tuple[str, str]]
+    candidate: Union[str, Tuple[str, str]],
 ) -> Optional[List[Candidate]]:
     if isinstance(candidate, str):
         return build_candidate_without_assumptions(candidate)

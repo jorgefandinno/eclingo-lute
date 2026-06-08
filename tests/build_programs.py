@@ -98,7 +98,7 @@ pp = MyPrettyPrinter(indent=4)
 
 
 def build_preprocessor_result(
-    value: Union[str, tuple[str, str]]
+    value: Union[str, tuple[str, str]],
 ) -> Tuple[List[Symbol], List[Symbol]]:
     if isinstance(value, str):
         lower = upper = value
@@ -161,8 +161,7 @@ str_programs = ",\n".join(
 path = os.path.dirname(os.path.abspath(__file__))
 path = os.path.join(path, "generated_programs.py")
 with open(path, "w") as f:
-    f.write(
-        f'''\
+    f.write(f'''\
 """
 DO NO MODIFY THIS FILE MANUALLY!
 
@@ -171,18 +170,15 @@ Modify the file "test/programs.py" and run "python test/build_programs.py" inste
 """
 
 
-'''
-    )
-    f.write(
-        f"""\
+''')
+    f.write(f"""\
 from clingo import Function, Number
 from eclingo.solver.candidate import Candidate, Assumptions
 from tests.programs_helper import Program
 
 programs = [
 {textwrap.indent(str_programs, 4*" ")}
-]"""
-    )
+]""")
 
 # for program in programs:
 #     program = complete_program(program)
