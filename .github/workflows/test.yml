@@ -18,9 +18,9 @@ jobs:
           - python-version: '3.11'
             clingo-version: '>=5.5.0,<5.6.0'
           - python-version: '3.12'
-            clingo-version: '>=5.6.0,<5.7.0'
+            clingo-version: '>=5.5.0,<5.6.0'
           - python-version: '3.12'
-            clingo-version: '>=5.7.0,<5.8.0'
+            clingo-version: '>=5.6.0,<5.7.0'
 
     steps:
     - uses: actions/checkout@v6
