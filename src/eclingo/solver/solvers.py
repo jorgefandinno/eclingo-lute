@@ -1,7 +1,7 @@
 import time
 from typing import Iterator, Sequence
 
-from clingo import Symbol
+from clingo.symbol import Symbol
 
 from eclingo.config import AppConfig
 from eclingo.solver.generator import GeneratorReification

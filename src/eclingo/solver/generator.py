@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Iterator, Optional, Sequence, Tuple, cast
 
 import clingo
-from clingo import Function, Symbol
+from clingo.symbol import Function, Symbol
 
 from eclingo import util
 from eclingo.clingox.backend import SymbolicBackend

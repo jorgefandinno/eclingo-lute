@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Union
 
-from clingo import Symbol
+from clingo.symbol import Symbol
 from clingo.ast import Sign
 
 

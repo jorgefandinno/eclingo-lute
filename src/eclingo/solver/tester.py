@@ -4,7 +4,7 @@ from collections import namedtuple
 from typing import Optional, Sequence, cast
 
 import clingo
-from clingo import Function, Symbol
+from clingo.symbol import Function, Symbol
 from clingo.control import Configuration
 
 from eclingo.clingox.backend import SymbolicBackend
