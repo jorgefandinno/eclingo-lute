@@ -1,3 +1,4 @@
+# Migrating clingo versions 5.8 -> 6
 We are going to update the project from using clingo package version 5.8 to the version 6.
 You can find the description of the API for clingo package version 5.8 in https://potassco.org/clingo/python-api/current/clingo/control.html
 You can find the description of the API for clingo package version 6 in https://potassco.org/clingo-preview/python-api/clingo.html
@@ -10,3 +11,6 @@ In your plan, start by modules that have no dependencies in the project. Then, m
 You can run clingo 5.8 using the conda environment `clingo5`.
 You can run clingo 6 using the conda environment `clingo6`.
 In case of doubt ask.
+
+---
+

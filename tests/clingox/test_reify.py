@@ -8,7 +8,7 @@ from tempfile import NamedTemporaryFile
 from typing import Any, Callable, Dict, Set, Union, cast
 from unittest import TestCase
 
-from clingo.application import Application, clingo_main
+from clingo.app import App, clingo_main
 from clingo.control import Control
 from clingo.symbol import Function, Number, Symbol
 from clingo.symbolic_atoms import SymbolicAtom
@@ -42,7 +42,7 @@ THEORY = """
 """
 
 
-class _Application(Application):
+class _App(App):
     def __init__(self, main):
         self._main = main
 
@@ -98,7 +98,7 @@ def _reify_check(
         else:
             app_main = cast(Any, prg)
 
-        proc = Process(target=clingo_main, args=(_Application(app_main), args))
+        proc = Process(target=clingo_main, args=(_App(app_main), args))
         proc.start()
         proc.join()
 

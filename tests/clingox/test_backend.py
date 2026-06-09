@@ -4,7 +4,8 @@ Test cases for the symbolic symbolic_backend.
 
 from unittest import TestCase
 
-from clingo import Control, Function, HeuristicType, TruthValue
+from clingo.control import Control
+from clingo.symbol import Function, HeuristicType, TruthValue
 
 from eclingo.clingox.backend import SymbolicBackend
 from eclingo.clingox.program import Program, ProgramObserver

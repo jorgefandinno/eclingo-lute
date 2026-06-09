@@ -191,7 +191,7 @@ class PrettyPrinter(_pp.PrettyPrinter):
         self._format_kwargs_items(items, stream, indent, allowance, context, level)
         stream.write(")")
 
-    _dispatch[Position.__repr__] = _pprint_pos
+    # _dispatch[Position.__repr__] = _pprint_pos
 
     def _pprint_loc(
         self,
@@ -209,7 +209,7 @@ class PrettyPrinter(_pp.PrettyPrinter):
         self._format_kwargs_items(items, stream, indent, allowance, context, level)
         stream.write(")")
 
-    _dispatch[Location.__repr__] = _pprint_loc
+    # _dispatch[Location.__repr__] = _pprint_loc
 
     def _pprint_sym(
         self,
@@ -230,4 +230,4 @@ class PrettyPrinter(_pp.PrettyPrinter):
         else:
             stream.write(repr(obj))
 
-    _dispatch[Symbol.__repr__] = _pprint_sym
+    # _dispatch[Symbol.__repr__] = _pprint_sym

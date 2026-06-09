@@ -5,7 +5,8 @@ Test cases for the ground program and observer.
 from typing import cast
 from unittest import TestCase
 
-from clingo import Control, Function, HeuristicType, TruthValue
+from clingo.control import Control
+from clingo.symbol import Function, HeuristicType, TruthValue
 
 from eclingo.clingox.program import (
     Edge,
