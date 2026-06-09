@@ -125,14 +125,10 @@ from typing import (
 )
 
 import clingo
+from clingo.core import Location, Position
 from clingo import ast
 from clingo.ast import (
-    AST,
-    ASTSequence,
-    ASTType,
     Function,
-    Location,
-    Position,
     Sign,
     StrSequence,
     SymbolicAtom,
@@ -143,6 +139,37 @@ from clingo.ast import (
     Transformer,
     UnaryOperation,
     parse_string,
+)
+
+AST = (
+    ast.Statement
+    | ast.Term
+    | ast.Literal
+    | ast.ArgumentTuple
+    | ast.BodyLiteral
+    | ast.BodyAggregateElement
+    | ast.Edge
+    | ast.HeadAggregateElement
+    | ast.HeadLiteral
+    | ast.LeftGuard
+    | ast.OptimizeElement
+    | ast.OptimizeTuple
+    | ast.ProgramPart
+    | ast.Projection
+    | ast.RightGuard
+    | ast.SetAggregateElement
+    | ast.TheoryAtomDefinition
+    | ast.TheoryAtomElement
+    | ast.TheoryGuardDefinition
+    | ast.TheoryOperatorDefinition
+    | ast.TheoryRightGuard
+    | ast.TheoryTermDefinition
+    | ast.TheoryTermFunction
+    | ast.TheoryTermSymbolic
+    | ast.TheoryTermTuple
+    | ast.TheoryTermUnparsed
+    | ast.TheoryTermVariable
+    | ast.UnparsedElement
 )
 
 from .theory import is_operator

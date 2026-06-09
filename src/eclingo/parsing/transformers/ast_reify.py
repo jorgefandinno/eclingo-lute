@@ -4,9 +4,11 @@ This module contains functions for reififcation of `AST` objects
 
 import clingo
 from clingo import ast
-from clingo.ast import AST, ASTType, Sign
+from clingo.ast import Sign
 
-from eclingo.clingox.ast import theory_term_to_literal, theory_term_to_term
+from eclingo.clingox.ast import theory_term_to_literal, theory_term_to_term, AST
+
+
 
 
 def _positive_symbolic_literal_to_term(x: AST):
