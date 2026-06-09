@@ -8,7 +8,7 @@ clingo objects.
 import pprint as _pp
 from typing import IO, Any, Dict, Optional, Sequence, Tuple
 
-from clingo.ast import AST, ASTSequence, Location, Position
+from clingo.core import Location, Position
 from clingo.symbol import Symbol, SymbolType
 
 __all__ = [
@@ -184,7 +184,12 @@ class PrettyPrinter(_pp.PrettyPrinter):
         context: Dict[int, Any],
         level: int,
     ):
-        self._pprint_namedtuple(obj, stream, indent, allowance, context, level)
+        items = [("file", obj.file), ("line", obj.line), ("column", obj.column)]
+        cls_name = obj.__class__.__name__
+        indent += len(cls_name) + 1
+        stream.write(cls_name + "(")
+        self._format_kwargs_items(items, stream, indent, allowance, context, level)
+        stream.write(")")
 
     _dispatch[Position.__repr__] = _pprint_pos
 
@@ -197,31 +202,14 @@ class PrettyPrinter(_pp.PrettyPrinter):
         context: Dict[int, Any],
         level: int,
     ):
-        self._pprint_namedtuple(obj, stream, indent, allowance, context, level)
-
-    _dispatch[Location.__repr__] = _pprint_loc
-
-    def _pprint_ast(
-        self,
-        obj: AST,
-        stream: IO[str],
-        indent: int,
-        allowance: int,
-        context: Dict[int, Any],
-        level: int,
-    ):
-        name = str(obj.ast_type).replace("ASTType", "ast")
-        indent += len(name) + 1
-        items = [
-            (key, _DummyLoc() if self._hide_location and key == "location" else val)
-            for key, val in obj.items()
-        ]
-        stream.write(name + "(")
+        items = [("begin", obj.begin), ("end", obj.end)]
+        cls_name = obj.__class__.__name__
+        indent += len(cls_name) + 1
+        stream.write(cls_name + "(")
         self._format_kwargs_items(items, stream, indent, allowance, context, level)
         stream.write(")")
 
-    _dispatch[AST.__repr__] = _pprint_ast
-    _dispatch[ASTSequence.__repr__] = _pp.PrettyPrinter._pprint_list  # type: ignore
+    _dispatch[Location.__repr__] = _pprint_loc
 
     def _pprint_sym(
         self,

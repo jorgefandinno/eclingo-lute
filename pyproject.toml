@@ -10,7 +10,6 @@ url = "https://test.pypi.org/simple/"
 
 [tool.poetry.dependencies]
 python = "^3.9"
-clingo = "^5.5.2"
 clingox = {version = "^1.2.1", source = "test"}
 
 [tool.poetry.dev-dependencies]

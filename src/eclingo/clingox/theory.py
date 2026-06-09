@@ -6,6 +6,7 @@ Example
 
 ```python-repl
 >>> from clingo.control import Control
+>>> from clingo.core import Library
 >>> from eclingo.clingox.theory import evaluate
 >>>
 >>> prg = """\
@@ -23,19 +24,22 @@ Example
 ... &eval{ 3**5-201 }.
 ... """
 >>>
->>> ctl = Control()
->>> ctl.add('base', [], prg)
->>> ctl.ground([('base', [])])
+>>> lib = Library()
+>>> ctl = Control(lib)
+>>> ctl.parse_string(prg)
+>>> ctl.ground()
 >>>
->>> atom = next(ctl.theory_atoms)
->>> print(evaluate(atom.elements[0].terms[0]))
+>>> atom = next(iter(ctl.base.theory))
+>>> print(evaluate(lib, atom.elements[0].terms[0]))
 42
 ```
 '''
 
 from typing import Any
 
-from clingo import Function, Number, String, Symbol, SymbolType, TheoryTermType, Tuple_
+from clingo.base import TheoryTermType
+from clingo.core import Library
+from clingo.symbol import Function, Number, String, Symbol, SymbolType, Tuple_
 
 __all__ = [
     "evaluate",
@@ -59,12 +63,14 @@ def require_number(x: Symbol) -> int:
     raise TypeError("number exepected")
 
 
-def invert_symbol(sym: Symbol) -> Symbol:
+def invert_symbol(lib: Library, sym: Symbol) -> Symbol:
     """
     Inverts the given symbol.
 
     Parameters
     ----------
+    lib
+        The clingo library object.
     sym
         The symbol to invert.
 
@@ -73,10 +79,10 @@ def invert_symbol(sym: Symbol) -> Symbol:
     The inverted symbol.
     """
     if sym.type == SymbolType.Number:
-        return Number(-sym.number)
+        return Number(lib, -sym.number)
 
     if sym.type == SymbolType.Function and sym.name:
-        return Function(sym.name, sym.arguments, not sym.positive)
+        return Function(lib, sym.name, sym.arguments, not sym.positive)
 
     raise TypeError("cannot invert symbol")
 
@@ -136,6 +142,9 @@ class TermEvaluator:
     operators.
     """
 
+    def __init__(self, lib: Library):
+        self._lib = lib
+
     def evaluate_binary(self, op: str, lhs: Symbol, rhs: Symbol) -> Symbol:
         """
         Evaluate binary terms as clingo would.
@@ -153,27 +162,28 @@ class TermEvaluator:
         -------
         The evaluated operator in form of a symbol.
         """
+        lib = self._lib
         if op == "+":
-            return Number(require_number(lhs) + require_number(rhs))
+            return Number(lib, require_number(lhs) + require_number(rhs))
         if op == "-":
-            return Number(require_number(lhs) - require_number(rhs))
+            return Number(lib, require_number(lhs) - require_number(rhs))
         if op == "*":
-            return Number(require_number(lhs) * require_number(rhs))
+            return Number(lib, require_number(lhs) * require_number(rhs))
         if op == "**":
-            return Number(require_number(lhs) ** require_number(rhs))
+            return Number(lib, require_number(lhs) ** require_number(rhs))
         if op == "\\":
-            if rhs == Number(0):
+            if rhs == Number(lib, 0):
                 raise ZeroDivisionError("division by zero")
-            return Number(require_number(lhs) % require_number(rhs))
+            return Number(lib, require_number(lhs) % require_number(rhs))
         if op == "/":
-            if rhs == Number(0):
+            if rhs == Number(lib, 0):
                 raise ZeroDivisionError("division by zero")
-            return Number(require_number(lhs) // require_number(rhs))
+            return Number(lib, require_number(lhs) // require_number(rhs))
 
         if is_operator(op):
             raise AttributeError("unexpected operator")
 
-        return Function(op, [lhs, rhs])
+        return Function(lib, op, [lhs, rhs])
 
     def evaluate_unary(self, op: str, arg: Symbol):
         """
@@ -190,14 +200,15 @@ class TermEvaluator:
         -------
         The evaluated operator in form of a symbol.
         """
+        lib = self._lib
         if op == "+":
-            return Number(require_number(arg))
+            return Number(lib, require_number(arg))
         if op == "-":
-            return invert_symbol(arg)
+            return invert_symbol(lib, arg)
         if is_operator(op):
             raise AttributeError("unexpected operator")
 
-        return Function(op, [arg])
+        return Function(lib, op, [arg])
 
     def __call__(self, term: Any):
         """
@@ -212,9 +223,10 @@ class TermEvaluator:
         -------
         The evaluated term in form of a symbol.
         """
+        lib = self._lib
         # tuples
         if term.type == TheoryTermType.Tuple:
-            return Tuple_([self(x) for x in term.arguments])
+            return Tuple_(lib, [self(x) for x in term.arguments])
 
         # functions and arithmetic operations
         if term.type == TheoryTermType.Function:
@@ -228,18 +240,18 @@ class TermEvaluator:
                 return self.evaluate_unary(term.name, *arguments)
 
             # functions
-            return Function(term.name, arguments)
+            return Function(lib, term.name, arguments)
 
         # constants
         if term.type == TheoryTermType.Symbol:
             if term.name.startswith('"') and term.name.endswith('"'):
-                return String(_unquote(term.name[1:-1]))
+                return String(lib, _unquote(term.name[1:-1]))
 
-            return Function(term.name)
+            return Function(lib, term.name)
 
         # numbers
         if term.type == TheoryTermType.Number:
-            return Number(term.number)
+            return Number(lib, term.number)
 
         raise RuntimeError("cannot evaluate term")
 
@@ -247,7 +259,7 @@ class TermEvaluator:
 __pdoc__["TermEvaluator.__call__"] = True
 
 
-def evaluate(term: Any) -> Symbol:
+def evaluate(lib: Library, term: Any) -> Symbol:
     """
     Evaluates the operators in a theory term in the same fashion as clingo
     evaluates its arithmetic functions.
@@ -257,6 +269,8 @@ def evaluate(term: Any) -> Symbol:
 
     Parameters
     ----------
+    lib
+        The clingo library object.
     term
         The theory term to evaluate.
 
@@ -264,4 +278,4 @@ def evaluate(term: Any) -> Symbol:
     -------
     The evaluated term in form of a symbol.
     """
-    return TermEvaluator()(term)
+    return TermEvaluator(lib)(term)

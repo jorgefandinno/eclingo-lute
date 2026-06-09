@@ -15,22 +15,23 @@ The following example shows how to:
 
 ```python-repl
 >>> from clingo.control import Control
+>>> from clingo.core import Library
 >>> from eclingo.clingox.program import Program, ProgramObserver, Remapping
 >>>
 >>> prg = Program()
->>> ctl_a = Control()
->>> ctl_a.register_observer(ProgramObserver(prg))
->>>
->>> ctl_a.add('base', [], 'a. {b}. c :- b.')
->>> ctl_a.ground([('base', [])])
+>>> lib = Library()
+>>> ctl_a = Control(lib)
+>>> ctl_a.parse_string('a. {b}. c :- b.')
+>>> ctl_a.ground()
+>>> ctl_a.observe(ProgramObserver(prg))
 >>> print(prg)
 a.
 __x1.
 c :- b.
 {b}.
 >>>
->>> ctl_b = Control(['0'])
->>> with ctl_b.backend() as backend:
+>>> ctl_b = Control(lib, ['0'])
+>>> with ctl_b.backend as backend:
 ...     mapping = Remapping(backend, prg.output_atoms, prg.facts)
 ...     prg.add_to_backend(backend, mapping)
 ...
@@ -58,7 +59,8 @@ from typing import (
     TypeVar,
 )
 
-from clingo import Backend, HeuristicType, Observer, Symbol, TruthValue
+from clingo.backend import Backend, ExternalType, HeuristicType, Observer
+from clingo.symbol import Symbol
 
 __all__ = [
     "add_to_backend",
@@ -192,13 +194,13 @@ def _pretty_str_rule_head(
     return ret
 
 
-def _pretty_str_truth_value(stm: TruthValue):
+def _pretty_str_truth_value(stm: ExternalType):
     """
-    Pretty print a truth value.
+    Pretty print an external type.
     """
-    if stm == TruthValue.False_:
+    if stm == ExternalType.False_:
         return "false"
-    if stm == TruthValue.True_:
+    if stm == ExternalType.True_:
         return "true"
     return "free"
 
@@ -352,7 +354,7 @@ def _add_to_backend_rule(stm: Rule, backend: Backend) -> None:
     """
     Add a rule to the backend.
     """
-    backend.add_rule(stm.head, stm.body, stm.choice)
+    backend.rule(stm.head, stm.body, stm.choice)
 
 
 class WeightRule(NamedTuple):
@@ -398,7 +400,7 @@ def _add_to_backend_weight_rule(stm: WeightRule, backend: Backend) -> None:
     """
     Add a weight rule to the backend.
     """
-    backend.add_weight_rule(stm.head, stm.lower_bound, stm.body, stm.choice)
+    backend.weight_rule(stm.head, stm.lower_bound, stm.body, stm.choice)
 
 
 class Project(NamedTuple):
@@ -430,7 +432,7 @@ def _add_to_backend_project(stm: Project, backend: Backend):
     """
     Add a project statement to the backend.
     """
-    backend.add_project([stm.atom])
+    backend.project([stm.atom])
 
 
 class External(NamedTuple):
@@ -439,7 +441,7 @@ class External(NamedTuple):
     """
 
     atom: Atom
-    value: TruthValue
+    value: ExternalType
 
 
 @pretty_str.register(External)
@@ -463,7 +465,7 @@ def _add_to_backend_external(stm: External, backend: Backend):
     """
     Add an external statement to the backend remapping its atom.
     """
-    backend.add_external(stm.atom, stm.value)
+    backend.external(stm.atom, stm.value)
 
 
 class Minimize(NamedTuple):
@@ -500,7 +502,7 @@ def _add_to_backend_minimize(stm: Minimize, backend: Backend):
     """
     Add a minimize statement to the backend.
     """
-    backend.add_minimize(stm.priority, stm.literals)
+    backend.minimize(stm.literals, stm.priority)
 
 
 class Heuristic(NamedTuple):
@@ -549,7 +551,7 @@ def _add_to_backend_heuristic(stm: Heuristic, backend: Backend) -> None:
     """
     Add a heurisitic statement to the backend.
     """
-    backend.add_heuristic(stm.atom, stm.type_, stm.bias, stm.priority, stm.condition)
+    backend.heuristic(stm.atom, stm.type_, stm.bias, stm.priority, stm.condition)
 
 
 class Edge(NamedTuple):
@@ -584,7 +586,7 @@ def _add_to_backend_edge(stm: Edge, backend: Backend) -> None:
     """
     Add an edge statement to the backend remapping its literals.
     """
-    backend.add_acyc_edge(stm.u, stm.v, stm.condition)
+    backend.edge(stm.u, stm.v, stm.condition)
 
 
 @dataclass
@@ -758,9 +760,9 @@ class Program:  # pylint: disable=too-many-instance-attributes
             if self.projects:
                 _add_stms_to_backend(self.projects, backend, mapping)
             else:
-                backend.add_project([])
+                backend.project([])
 
-        backend.add_assume(
+        backend.assume(
             [_remap_lit(lit, mapping) if mapping else lit for lit in self.assumptions]
         )
 
@@ -836,9 +838,9 @@ class Remapping:
         self._map = {}
         for atom, sym in output_atoms.items():
             assert atom not in self._map
-            self._map[atom] = self._backend.add_atom(sym)
+            self._map[atom] = self._backend.atom(sym)
         for fact in facts:
-            backend.add_rule([backend.add_atom(fact.symbol)])
+            backend.rule([backend.atom(fact.symbol)])
 
     def __call__(self, atom: Atom) -> Atom:
         """
@@ -857,7 +859,7 @@ class Remapping:
         The remapped program atom.
         """
         if atom not in self._map:
-            self._map[atom] = self._backend.add_atom()
+            self._map[atom] = self._backend.atom()
 
         return self._map[atom]
 
@@ -881,6 +883,7 @@ class ProgramObserver(Observer):
     _program: Program
 
     def __init__(self, program: Program):
+        super().__init__()
         self._program = program
 
     def begin_step(self) -> None:
@@ -889,50 +892,47 @@ class ProgramObserver(Observer):
         """
         self._program.assumptions.clear()
 
-    def output_atom(self, symbol: Symbol, atom: Atom) -> None:
+    def end_step(self, base) -> None:
         """
-        Add the given atom to the list of facts or output table.
+        Populate output_atoms, facts, and shows from the base.
         """
-        if atom != 0:
-            self._program.output_atoms[atom] = symbol
-        else:
-            self._program.facts.append(Fact(symbol))
+        for _sig, atom_base in base.items():
+            for symbol, atom in atom_base.items():
+                if base.is_shown(atom.literal):
+                    if base.is_fact(atom.literal):
+                        self._program.facts.append(Fact(symbol))
+                    else:
+                        self._program.output_atoms[atom.literal] = symbol
+        for term in base.terms:
+            self._program.shows.append(Show(term, []))
 
-    def output_term(self, symbol: Symbol, condition: Sequence[Literal]) -> None:
-        """
-        Add a term to the output table.
-        """
-        self._program.shows.append(Show(symbol, condition))
-
-    def rule(self, choice: bool, head: Sequence[Atom], body: Sequence[Literal]) -> None:
+    def rule(self, head: Sequence[Atom], body: Sequence[Literal], choice: bool) -> None:
         """
         Add a rule to the ground representation.
 
         Parameters
         ----------
-        choice
-            Determines if the head is a choice or a disjunction.
         head
             List of program atoms forming the rule head.
         body
             List of program literals forming the rule body.
+        choice
+            Determines if the head is a choice or a disjunction.
         """
         self._program.rules.append(Rule(choice, head, body))
 
     def weight_rule(
         self,
-        choice: bool,
         head: Sequence[Atom],
         lower_bound: Weight,
         body: Sequence[Tuple[Literal, Weight]],
+        choice: bool,
     ) -> None:
         """
         Add a weight rule to the ground representation.
 
         Parameters
         ----------
-        choice
-            Determines if the head is a choice or a disjunction.
         head
             List of program atoms forming the head of the rule.
         lower_bound
@@ -940,6 +940,8 @@ class ProgramObserver(Observer):
         body
             List of weighted literals (pairs of literal and weight) forming the
             elements of the weight constraint.
+        choice
+            Determines if the head is a choice or a disjunction.
         """
         self._program.weight_rules.append(WeightRule(choice, head, lower_bound, body))
 
@@ -956,7 +958,7 @@ class ProgramObserver(Observer):
             self._program.projects = []
         self._program.projects.extend(Project(atom) for atom in atoms)
 
-    def external(self, atom: Atom, value: TruthValue) -> None:
+    def external(self, atom: Atom, type: ExternalType) -> None:
         """
         Add an external statement to the ground representation.
 
@@ -964,10 +966,10 @@ class ProgramObserver(Observer):
         ----------
         atom
             The external atom in form of a program literal.
-        value
-            The truth value of the external statement.
+        type
+            The external type of the statement.
         """
-        self._program.externals.append(External(atom, value))
+        self._program.externals.append(External(atom, type))
 
     def assume(self, literals: Sequence[Literal]) -> None:
         """
@@ -982,33 +984,33 @@ class ProgramObserver(Observer):
         self._program.assumptions.extend(literals)
 
     def minimize(
-        self, priority: Weight, literals: Sequence[Tuple[Literal, Weight]]
+        self, literals: Sequence[Tuple[Literal, Weight]], priority: Weight
     ) -> None:
         """
         Add a minimize statement to the ground representation.
 
         Parameters
         ----------
-        priority
-            The priority of the directive.
         literals
             List of weighted literals whose sum to minimize (pairs of literal
             and weight).
+        priority
+            The priority of the directive.
         """
         self._program.minimizes.append(Minimize(priority, literals))
 
-    def acyc_edge(self, node_u: int, node_v: int, condition: Sequence[Literal]) -> None:
+    def edge(self, node_u: int, node_v: int, condition: Sequence[Literal]) -> None:
         """
-        Add an edge statement to the gronud representation.
+        Add an edge statement to the ground representation.
 
         Parameters
         ----------
         node_u
             The start vertex of the edge (in form of an integer).
         node_v
-            Тhe end vertex of the edge (in form of an integer).
+            The end vertex of the edge (in form of an integer).
         condition
-            The list of program literals forming th condition under which to
+            The list of program literals forming the condition under which to
             add the edge.
         """
         self._program.edges.append(Edge(node_u, node_v, condition))
@@ -1017,12 +1019,12 @@ class ProgramObserver(Observer):
         self,
         atom: Atom,
         type_: HeuristicType,
-        bias: Weight,
+        weight: Weight,
         priority: Weight,
         condition: Sequence[Literal],
     ) -> None:
         """
-        Add heurisitic statement to the gronud representation.
+        Add heuristic statement to the ground representation.
 
         Parameters
         ----------
@@ -1030,7 +1032,7 @@ class ProgramObserver(Observer):
             The program atom heuristically modified.
         type_
             The type of the modification.
-        bias
+        weight
             A signed integer.
         priority
             An unsigned integer.
@@ -1038,5 +1040,5 @@ class ProgramObserver(Observer):
             List of program literals.
         """
         self._program.heuristics.append(
-            Heuristic(atom, type_, bias, priority, condition)
+            Heuristic(atom, type_, weight, priority, condition)
         )

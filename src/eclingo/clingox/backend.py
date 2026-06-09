@@ -12,13 +12,15 @@ The following example shows how to add the rules
 
 to a program using the `SymbolicBackend`:
 
-    >>> import clingo
+    >>> import clingo.control, clingo.core, clingo.symbol
     >>> from eclingo.clingox.backend import SymbolicBackend
-    >>> ctl = clingo.Control()
-    >>> a = clingo.Function("a")
-    >>> b = clingo.Function("b")
-    >>> c = clingo.Function("c")
-    >>> with SymbolicBackend(ctl.backend()) as symbolic_backend:
+    >>> lib = clingo.core.Library()
+    >>> ctl = clingo.control.Control(lib)
+    >>> a = clingo.symbol.Function(lib, "a")
+    >>> b = clingo.symbol.Function(lib, "b")
+    >>> c = clingo.symbol.Function(lib, "c")
+    >>> with ctl.backend as symbolic_backend_backend:
+            symbolic_backend = SymbolicBackend(symbolic_backend_backend)
             symbolic_backend.add_rule([a], [b], [c])
             symbolic_backend.add_rule([b])
     >>> ctl.solve(on_model=lambda m: print("Answer: {}".format(m)))
@@ -29,17 +31,18 @@ The `SymbolicBackend` can also be used in combination with the `Backend`
 that it wraps. In this case, it is the `Backend` that must be used with
 Python's `with` statement:
 
-    >>> import clingo
+    >>> import clingo.control, clingo.core, clingo.symbol
     >>> from eclingo.clingox.backend import SymbolicBackend
-    >>> ctl = clingo.Control()
-    >>> a = clingo.Function("a")
-    >>> b = clingo.Function("b")
-    >>> c = clingo.Function("c")
-    >>> with ctl.backend() as backend:
+    >>> lib = clingo.core.Library()
+    >>> ctl = clingo.control.Control(lib)
+    >>> a = clingo.symbol.Function(lib, "a")
+    >>> b = clingo.symbol.Function(lib, "b")
+    >>> c = clingo.symbol.Function(lib, "c")
+    >>> with ctl.backend as backend:
             symbolic_backend = SymbolicBackend(backend)
             symbolic_backend.add_rule([a], [b], [c])
-            atom_b = backend.add_atom(b)
-            backend.add_rule([atom_b])
+            atom_b = backend.atom(b)
+            backend.rule([atom_b])
     >>> ctl.solve(on_model=lambda m: print("Answer: {}".format(m)))
     Answer: a b
     SAT
@@ -48,7 +51,8 @@ Python's `with` statement:
 from itertools import chain
 from typing import Iterable, Sequence, Tuple
 
-from clingo import Backend, HeuristicType, Symbol, TruthValue
+from clingo.backend import Backend, ExternalType, HeuristicType
+from clingo.symbol import Symbol
 
 __all__ = ["SymbolicBackend"]
 
@@ -134,7 +138,7 @@ class SymbolicBackend:
         condition = chain(
             self._add_lits(pos_condition, True), self._add_lits(neg_condition, False)
         )
-        self.backend.add_acyc_edge(node_u, node_v, list(condition))
+        self.backend.edge(node_u, node_v, list(condition))
 
     def add_assume(
         self, pos_atoms: Sequence[Symbol] = (), neg_atoms: Sequence[Symbol] = ()
@@ -152,9 +156,11 @@ class SymbolicBackend:
         literals = chain(
             self._add_lits(pos_atoms, True), self._add_lits(neg_atoms, False)
         )
-        self.backend.add_assume(list(literals))
+        self.backend.assume(list(literals))
 
-    def add_external(self, atom: Symbol, value: TruthValue = TruthValue.False_) -> None:
+    def add_external(
+        self, atom: Symbol, value: ExternalType = ExternalType.False_
+    ) -> None:
         """
         Mark an atom as external and set its truth value.
 
@@ -163,13 +169,13 @@ class SymbolicBackend:
         atom
             The atom to mark as external.
         value
-            Optional truth value.
+            Optional external type.
 
         Notes
         -----
-        Can also be used to release an external atom using `TruthValue.Release`.
+        Can also be used to release an external atom using `ExternalType.Release`.
         """
-        return self.backend.add_external(self.backend.add_atom(atom), value)
+        return self.backend.external(self.backend.atom(atom), value)
 
     def add_heuristic(
         self,
@@ -202,8 +208,8 @@ class SymbolicBackend:
         condition = chain(
             self._add_lits(pos_condition, True), self._add_lits(neg_condition, False)
         )
-        return self.backend.add_heuristic(
-            self.backend.add_atom(atom), type_, bias, priority, list(condition)
+        return self.backend.heuristic(
+            self.backend.atom(atom), type_, bias, priority, list(condition)
         )
 
     def add_minimize(
@@ -229,7 +235,7 @@ class SymbolicBackend:
         literals = chain(
             self._add_wlits(pos_literals, True), self._add_wlits(neg_literals, False)
         )
-        return self.backend.add_minimize(priority, list(literals))
+        return self.backend.minimize(list(literals), priority)
 
     def add_project(self, atoms: Sequence[Symbol]) -> None:
         """
@@ -240,7 +246,7 @@ class SymbolicBackend:
         atoms
             List of atoms to project on.
         """
-        return self.backend.add_project(list(self._add_lits(atoms, True)))
+        return self.backend.project(list(self._add_lits(atoms, True)))
 
     def add_rule(
         self,
@@ -269,9 +275,7 @@ class SymbolicBackend:
         singleton head list, respectively.
         """
         body = chain(self._add_lits(pos_body, True), self._add_lits(neg_body, False))
-        return self.backend.add_rule(
-            list(self._add_lits(head, True)), list(body), choice
-        )
+        return self.backend.rule(list(self._add_lits(head, True)), list(body), choice)
 
     def add_weight_rule(
         self,
@@ -301,7 +305,7 @@ class SymbolicBackend:
             Whether to add a disjunctive or choice rule.
         """
         body = chain(self._add_wlits(pos_body, True), self._add_wlits(neg_body, False))
-        return self.backend.add_weight_rule(
+        return self.backend.weight_rule(
             list(self._add_lits(head, True)), lower, list(body), choice
         )
 
@@ -309,7 +313,7 @@ class SymbolicBackend:
         """
         Map the given atoms to program literals with the given sign.
         """
-        return (_add_sign(self.backend.add_atom(symbol), sign) for symbol in atoms)
+        return (_add_sign(self.backend.atom(symbol), sign) for symbol in atoms)
 
     def _add_wlits(
         self, weighted_symbols: Sequence[Tuple[Symbol, int]], sign: bool
@@ -319,6 +323,5 @@ class SymbolicBackend:
         given sign.
         """
         return (
-            (_add_sign(self.backend.add_atom(x), sign), w)
-            for (x, w) in weighted_symbols
+            (_add_sign(self.backend.atom(x), sign), w) for (x, w) in weighted_symbols
         )

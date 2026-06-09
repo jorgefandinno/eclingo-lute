@@ -5,7 +5,6 @@ program
 
 from typing import Optional, Sequence, Tuple
 
-from clingo.configuration import Configuration
 from clingo.control import Control
 from clingo.symbol import Symbol
 
@@ -34,22 +33,21 @@ def approximate(ctl: Control) -> Optional[Tuple[Sequence[Symbol], Sequence[Symbo
     problem is unsatisfiable.
     """
     # solve with a limit of 0 conflicts to propagate direct consequences
-    assert isinstance(ctl.configuration.solve, Configuration)
-    solve_limit = ctl.configuration.solve.solve_limit
-    ctl.configuration.solve.solve_limit = 0
-    ctl.solve()
-    ctl.configuration.solve.solve_limit = solve_limit
-    ctl.cleanup()
+    solve_limit = ctl.config.solve.solve_limit.value
+    ctl.config.solve.solve_limit.value = "0"
+    result = ctl.solve()
+    ctl.config.solve.solve_limit.value = solve_limit
 
     # check if the problem is conflicting
-    if ctl.is_conflicting:
+    if result.unsatisfiable:
         return None
 
     # return approximation
     lower = []
     upper = []
-    for sa in ctl.symbolic_atoms:
-        upper.append(sa.symbol)
-        if sa.is_fact:
-            lower.append(sa.symbol)
+    for _sig, ab in ctl.base.items():
+        for sym, atom in ab.items():
+            upper.append(sym)
+            if ctl.base.is_fact(atom.literal):
+                lower.append(sym)
     return lower, upper
