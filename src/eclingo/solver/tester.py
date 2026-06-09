@@ -5,7 +5,7 @@ from typing import Optional, Sequence, cast
 
 import clingo
 from clingo.symbol import Function, Symbol
-from clingo.control import Configuration
+from clingo.config import Config
 
 from eclingo.clingox.backend import SymbolicBackend
 from eclingo.config import AppConfig
@@ -14,7 +14,7 @@ from .candidate import Candidate
 
 
 def _approximate(
-    ctl: clingo.Control,
+    ctl: clingo.control.Control,
 ) -> Optional[tuple[Sequence[Symbol], Sequence[Symbol]]]:
     """
     Approximate the stable models of a program.

@@ -82,7 +82,7 @@ def invert_symbol(lib: Library, sym: Symbol) -> Symbol:
         return Number(lib, -sym.number)
 
     if sym.type == SymbolType.Function and sym.name:
-        return Function(lib, sym.name, sym.arguments, not sym.positive)
+        return Function(lib, sym.name, sym.arguments, not sym.is_positive)
 
     raise TypeError("cannot invert symbol")
 

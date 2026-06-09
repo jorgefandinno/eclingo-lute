@@ -2,7 +2,7 @@ import sys
 import time
 from typing import Iterable, List, Optional, Sequence, Tuple
 
-from clingo import Symbol
+from clingo.symbol import Symbol
 from clingo.ast import AST
 
 from eclingo.config import AppConfig

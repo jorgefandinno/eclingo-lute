@@ -491,16 +491,8 @@ class Reifier(Observer):
         next_id: List[int] = [0]
 
         for atm in theory:
-            # Atom name
-            name_key = (1, atm.name)
-            if name_key not in term_map:
-                name_id = next_id[0]
-                next_id[0] += 1
-                term_map[name_key] = name_id
-                self._output(
-                    "theory_string", [Number(lib, name_id), String(lib, atm.name)]
-                )
-            name_id = term_map[name_key]
+            # Atom name (atm.name is a TheoryTerm in clingo 6, not a str)
+            name_id = self._process_theory_term(atm.name, term_map, next_id)
 
             # Elements
             element_ids: List[int] = []

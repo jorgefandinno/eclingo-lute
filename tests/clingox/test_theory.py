@@ -5,6 +5,7 @@ Simple tests for term evaluation.
 from unittest import TestCase
 
 from clingo.control import Control
+from clingo.core import Library
 from clingo.symbol import Function, Number, String, Symbol, Tuple_
 
 from eclingo.clingox.theory import (
@@ -15,15 +16,15 @@ from eclingo.clingox.theory import (
     require_number,
 )
 
+lib = Library()
+
 
 def eval_term_sym(s: str) -> Symbol:
     """
     Evaluate the given theory term and return its string representation.
     """
-    ctl = Control()
-    ctl.add(
-        "base",
-        [],
+    ctl = Control(lib, [])
+    ctl.parse_string(
         f"""
 #theory test {{
     t {{
@@ -41,11 +42,11 @@ def eval_term_sym(s: str) -> Symbol:
     &a/0 : t, head
 }}.
 &a {{{s}}}.
-""",
+"""
     )
-    ctl.ground([("base", [])])
-    for x in ctl.theory_atoms:
-        return evaluate(x.elements[0].terms[0])
+    ctl.ground()
+    for x in ctl.base.theory:
+        return evaluate(lib, x.elements[0].tuple[0])
     assert False
 
 
@@ -93,7 +94,7 @@ class TestTheory(TestCase):
         """
         Test evaluation of strings.
         """
-        self.assertEqual(eval_term_sym('"a\\\\b\\nc\\"d"'), String('a\\b\nc"d'))
+        self.assertEqual(eval_term_sym('"a\\\\b\\nc\\"d"'), String(lib, 'a\\b\nc"d'))
 
     def test_tuple(self):
         """
@@ -125,39 +126,39 @@ class TestTheory(TestCase):
 
 class TestRequireNumber(TestCase):
     def test_number(self):
-        self.assertEqual(require_number(Number(5)), 5)
-        self.assertEqual(require_number(Number(-3)), -3)
-        self.assertEqual(require_number(Number(0)), 0)
+        self.assertEqual(require_number(Number(lib, 5)), 5)
+        self.assertEqual(require_number(Number(lib, -3)), -3)
+        self.assertEqual(require_number(Number(lib, 0)), 0)
 
     def test_non_number(self):
-        self.assertRaises(TypeError, require_number, Function("a"))
-        self.assertRaises(TypeError, require_number, String("hello"))
+        self.assertRaises(TypeError, require_number, Function(lib, "a"))
+        self.assertRaises(TypeError, require_number, String(lib, "hello"))
 
 
 class TestInvertSymbol(TestCase):
     def test_number(self):
-        self.assertEqual(invert_symbol(Number(5)), Number(-5))
-        self.assertEqual(invert_symbol(Number(-3)), Number(3))
-        self.assertEqual(invert_symbol(Number(0)), Number(0))
+        self.assertEqual(invert_symbol(lib, Number(lib, 5)), Number(lib, -5))
+        self.assertEqual(invert_symbol(lib, Number(lib, -3)), Number(lib, 3))
+        self.assertEqual(invert_symbol(lib, Number(lib, 0)), Number(lib, 0))
 
     def test_positive_function(self):
         self.assertEqual(
-            invert_symbol(Function("a", [], True)), Function("a", [], False)
+            invert_symbol(lib, Function(lib, "a", [], True)), Function(lib, "a", [], False)
         )
         self.assertEqual(
-            invert_symbol(Function("f", [Number(1)], True)),
-            Function("f", [Number(1)], False),
+            invert_symbol(lib, Function(lib, "f", [Number(lib, 1)], True)),
+            Function(lib, "f", [Number(lib, 1)], False),
         )
 
     def test_negative_function(self):
         self.assertEqual(
-            invert_symbol(Function("a", [], False)), Function("a", [], True)
+            invert_symbol(lib, Function(lib, "a", [], False)), Function(lib, "a", [], True)
         )
 
     def test_error(self):
-        self.assertRaises(TypeError, invert_symbol, String("hello"))
-        self.assertRaises(TypeError, invert_symbol, Tuple_([Number(1), Number(2)]))
-        self.assertRaises(TypeError, invert_symbol, Function("", [], True))
+        self.assertRaises(TypeError, invert_symbol, lib, String(lib, "hello"))
+        self.assertRaises(TypeError, invert_symbol, lib, Tuple_(lib, [Number(lib, 1), Number(lib, 2)]))
+        self.assertRaises(TypeError, invert_symbol, lib, Function(lib, "", [], True))
 
 
 class TestIsOperator(TestCase):

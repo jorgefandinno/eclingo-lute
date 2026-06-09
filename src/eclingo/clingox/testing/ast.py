@@ -50,6 +50,16 @@ def parse_term(lib: Library, term: str) -> Any:
     return lit.literal.atom.pool[0].arguments[0]
 
 
+def _ast_eq(first: Any, second: Any) -> bool:
+    """
+    Compare two AST nodes for equality, returning False on TypeError (incompatible types).
+    """
+    try:
+        return first == second
+    except TypeError:
+        return False
+
+
 class ASTTestCase(TestCase):
     """
     Class for comparing clingo AST nodes.
@@ -60,8 +70,20 @@ class ASTTestCase(TestCase):
         Test whether two clingo AST nodes are equal.
         """
         # pylint: disable=invalid-name
-        self.assertEqual(str(first), str(second), msg)
-        first_repr = pformat(first, hide_location=True) + "\n"
-        second_repr = pformat(second, hide_location=True) + "\n"
+        first_repr = f"{type(first).__name__}({str(first)})"
+        second_repr = f"{type(second).__name__}({str(second)})"
         self.assertEqual(first_repr, second_repr, msg)
-        assert first == second
+        if not _ast_eq(first, second):
+            raise AssertionError(f"{first!r} != {second!r}" if msg is None else msg)
+
+    def assertEqual(self, first: Any, second: Any, msg: Any = None) -> None:
+        """
+        Test equality using clingo 6 AST-compatible comparison.
+        """
+        # pylint: disable=invalid-name
+        if not _ast_eq(first, second):
+            if not isinstance(first, str) and not isinstance(second, str):
+                raise AssertionError(
+                    f"{first!r} != {second!r}" if msg is None else msg
+                )
+        super().assertEqual(first, second, msg)

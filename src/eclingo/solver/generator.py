@@ -183,7 +183,7 @@ class GeneratorReification:
                 self.num_candidates += 1
                 yield candidate
 
-    def _model_to_candidate(self, model: clingo.Model) -> Candidate:
+    def _model_to_candidate(self, model: clingo.solve.Model) -> Candidate:
         (
             positive_candidate,
             negative_candidate,

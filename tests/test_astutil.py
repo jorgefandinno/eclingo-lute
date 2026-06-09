@@ -1,7 +1,7 @@
 import unittest
 
 from clingo import ast
-from clingo.ast import Location, Position, Sign
+from clingo.core import Location, Position, Sign
 
 from eclingo.parsing.transformers.astutil import atom, negate_literal
 

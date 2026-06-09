@@ -14,3 +14,4 @@ In case of doubt ask.
 
 ---
 
+Some tests in tests/clingox/ report errors. Fix them.

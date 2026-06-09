@@ -8,7 +8,7 @@ from typing import Callable, Container, List, Optional, Sequence, cast
 from unittest import TestCase
 
 import clingo
-from clingo import Function, Number
+from clingo.symbol import Function, Number
 from clingo.ast import (
     AST,
     AggregateFunction,

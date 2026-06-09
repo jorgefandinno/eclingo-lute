@@ -6,7 +6,7 @@ from copy import copy
 from typing import List, Optional, Set, Tuple
 
 from clingo import ast
-from clingo.ast import Location, Position, Transformer
+from clingo.core import Location, Position, Transformer
 
 from . import ast_reify
 

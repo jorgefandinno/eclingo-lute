@@ -518,7 +518,7 @@ class Heuristic(NamedTuple):
 
 
 def _pretty_str_heuristic_type(type_):
-    return str(type_).replace("HeuristicType.", "")
+    return type_.name
 
 
 @pretty_str.register(Heuristic)

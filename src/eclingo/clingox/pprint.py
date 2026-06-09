@@ -222,7 +222,7 @@ class PrettyPrinter(_pp.PrettyPrinter):
     ):
         if obj.type == SymbolType.Function:
             indent += 9
-            items = [obj.name, obj.arguments, obj.positive]
+            items = [obj.name, obj.arguments, obj.is_positive]
 
             stream.write("Function(")
             self._format_args_items(items, stream, indent, allowance, context, level)
@@ -230,4 +230,24 @@ class PrettyPrinter(_pp.PrettyPrinter):
         else:
             stream.write(repr(obj))
 
-    # _dispatch[Symbol.__repr__] = _pprint_sym
+    def _format(  # type: ignore[override]
+        self,
+        obj: Any,
+        stream: IO[str],
+        indent: int,
+        allowance: int,
+        context: Dict[int, Any],
+        level: int,
+    ) -> None:
+        if isinstance(obj, Symbol):
+            rep = self._repr(obj, context, level)
+            max_width = self._width - indent - allowance
+            if len(rep) <= max_width:
+                stream.write(rep)
+                return
+            objid = id(obj)
+            context[objid] = 1
+            self._pprint_sym(obj, stream, indent, allowance, context, level + 1)
+            del context[objid]
+            return
+        super()._format(obj, stream, indent, allowance, context, level)  # type: ignore[misc]

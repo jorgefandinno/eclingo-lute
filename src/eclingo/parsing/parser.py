@@ -1,7 +1,7 @@
 from typing import Callable, Iterable, List, Sequence, cast
 
 from clingo import ast
-from clingo.ast import Location, Position
+from clingo.core import Location, Position
 
 from eclingo.config import AppConfig
 

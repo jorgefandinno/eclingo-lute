@@ -86,7 +86,8 @@ class SymbolicBackend:
     The underlying `clingo.backend.Backend` object.
     """
 
-    def __init__(self, backend: Backend):
+    def __init__(self, backend):
+        self._backend_ctx = backend
         self.backend: Backend = backend
 
     def __enter__(self):
@@ -101,7 +102,7 @@ class SymbolicBackend:
         -----
         Must be called before using the backend.
         """
-        self.backend.__enter__()
+        self.backend = self._backend_ctx.__enter__()
         return self
 
     def __exit__(self, type_, value, traceback):
@@ -112,7 +113,7 @@ class SymbolicBackend:
         -----
         Follows Python's __exit__ conventions. Does not suppress exceptions.
         """
-        return self.backend.__exit__(type_, value, traceback)
+        return self._backend_ctx.__exit__(type_, value, traceback)
 
     def add_acyc_edge(
         self,

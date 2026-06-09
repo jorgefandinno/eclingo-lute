@@ -6,8 +6,8 @@ import sys
 import time
 from typing import Final, Sequence
 
-from clingo import Flag
-from clingo.application import clingo_main
+from clingo.app import Flag
+from clingo.app import clingo_main
 
 from eclingo.config import AppConfig
 from eclingo.control import Control

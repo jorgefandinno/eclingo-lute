@@ -2,7 +2,7 @@ import os
 import unittest
 
 import clingo
-from clingo import Number
+from clingo.symbol import Number
 
 import eclingo as _eclingo
 from eclingo.control import Control
