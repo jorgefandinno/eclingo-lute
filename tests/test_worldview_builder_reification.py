@@ -9,7 +9,11 @@ import eclingo as _eclingo
 from eclingo.literals import Literal
 from eclingo.solver.candidate import Candidate
 from eclingo.solver.world_view import EpistemicLiteral, WorldView
-from eclingo.solver.world_view_builder import WorldWiewBuilderReification
+from eclingo.solver.world_view_builder import (
+    WorldWiewBuilderReification,
+    WorldWiewBuilderReificationWithShow,
+)
+from tests.parse_programs import parse_program as _parse_reified
 
 # python -m unittest tests.test_worldview_builder_reification.TestEclingoWViewReification
 
@@ -309,4 +313,30 @@ class TestEclingoWViewReification(TestCase):
                     ]
                 )
             ],
+        )
+
+
+# reification of: {a}. #show a/0.
+_PRG_OPTIONAL_A_WITH_SHOW = (
+    "tag(incremental). atom_tuple(0). atom_tuple(0,1). literal_tuple(0). "
+    "rule(choice(0),normal(0)). atom_tuple(1). atom_tuple(1,2). "
+    "literal_tuple(1). literal_tuple(1,1). rule(disjunction(1),normal(1)). "
+    "output(u(a),1). literal_tuple(2). literal_tuple(2,2). output(show_statement(a),2)."
+)
+
+
+class TestEclingoWViewReificationWithShow(TestCase):
+    def test_show_m_symbol(self):
+        # {a}. #show a/0. — a is optional, so world view is &m{a}
+        # This exercises world_view_builder.py line 183: the elif branch where
+        # show_statement(a) is present but u(a) is not in the cautious model
+        # (true in some answer sets but not all) and not1(u(a)) is also absent.
+        reified = _parse_reified(_PRG_OPTIONAL_A_WITH_SHOW)
+        builder = WorldWiewBuilderReificationWithShow(reified)
+        wv = builder(Candidate(pos=[], neg=[]))
+        self.assertEqual(
+            wv,
+            WorldView(
+                [EpistemicLiteral(Function("a", [], True), Sign.NoSign, is_m=True)]
+            ),
         )

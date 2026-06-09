@@ -25,6 +25,12 @@ def parse_program(stm, parameters=[], name="base"):
     return flatten(ret)
 
 
+def parse_program_m_normal_form(stm, parameters=[], name="base"):
+    ret = []
+    parser.parse_program(stm, ret.append, parameters, name, only_m_normal_form=True)
+    return flatten(ret)
+
+
 def clingo_parse_program(stm):
     ret = []
     ast.parse_string(stm, ret.append)
@@ -243,4 +249,28 @@ class MandOldNegationTest(TestCase):
         self.assert_equal_program(
             parse_program(":- not not &m{~ a}."),
             ":- not k(not2(u(a))). {k(not2(u(a)))} :- not2(u(a)). not2(u(a)) :- not not u(a).",
+        )
+
+
+class TestOnlyMNormalForm(TestCase):
+    def assert_equal_str_program(self, program, expected):
+        self.assertCountEqual(sorted(program), sorted(expected))
+
+    def test_m_atom(self):
+        # only_m_normal_form=True returns after parse_m_literals, before reification (lines 95-96)
+        self.assert_equal_str_program(
+            parse_program_m_normal_form(":- &m{a}."),
+            ["#program base.", "#false :- not &k { not a }."],
+        )
+
+    def test_m_atom_with_negation(self):
+        self.assert_equal_str_program(
+            parse_program_m_normal_form(":- &m{not a}."),
+            ["#program base.", "#false :- not &k { not not a }."],
+        )
+
+    def test_plain_rule_unchanged(self):
+        self.assert_equal_str_program(
+            parse_program_m_normal_form("a :- b."),
+            ["#program base.", "a :- b."],
         )

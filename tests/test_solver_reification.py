@@ -30,6 +30,16 @@ def solve(reified_program):
     # return wviews
 
 
+def solve_with_config(reified_program, **kwargs):
+    reified_program = parse_program(reified_program)
+    config = _eclingo.config.AppConfig()
+    config.eclingo_semantics = "c19-1"
+    for k, v in kwargs.items():
+        setattr(config, k, v)
+    solver = SolverReification(reified_program, config)
+    return sorted(solver.solve())
+
+
 class TestCase(unittest.TestCase):
     def assert_models(self, models, expected):
         self.assertEqual(models, expected)
@@ -210,4 +220,45 @@ class TestEclingoSolverReification(TestCase):
                     ]
                 ),
             ],
+        )
+
+
+# reification of: a. b :- &k{a}.   (same as test_solver_reification01)
+_PRG_A_KNOWS_A = """tag(incremental). atom_tuple(0). atom_tuple(0,1). literal_tuple(0).
+    rule(disjunction(0),normal(0)). atom_tuple(1).
+    atom_tuple(1,2). rule(choice(1),normal(0)). atom_tuple(2).
+    atom_tuple(2,3). literal_tuple(1). literal_tuple(1,2).
+    rule(disjunction(2),normal(1)). output(k(u(a)),1).
+    output(u(a),0). literal_tuple(2). literal_tuple(2,3). output(u(b),2)."""
+
+# reification of: a. b :- &k{a}. :- b.   (unsatisfiable)
+_PRG_UNSAT = """atom_tuple(0). atom_tuple(0,1). literal_tuple(0). rule(disjunction(0),normal(0)).
+    atom_tuple(1). atom_tuple(1,2). rule(choice(1),normal(0)).
+    atom_tuple(2). atom_tuple(2,3). literal_tuple(1). literal_tuple(1,2). rule(disjunction(2),normal(1)).
+    atom_tuple(3). literal_tuple(2). literal_tuple(2,3). rule(disjunction(3),normal(2)).
+    output(k(u(a)),1). output(u(a),0). output(u(b),2)."""
+
+
+class TestIgnoreShows(TestCase):
+    def test_ignore_shows_uses_base_builder(self):
+        # config.ignore_shows=True exercises the WorldWiewBuilderReification branch (line 25)
+        self.assert_models(
+            solve_with_config(_PRG_A_KNOWS_A, ignore_shows=True),
+            [WorldView([EpistemicLiteral(Function("a", [], True), 0, False)])],
+        )
+
+
+class TestPreprocessing(TestCase):
+    def test_preprocessing_satisfiable(self):
+        # preprocessing_level=1 exercises the else branch (lines 44-49)
+        self.assert_models(
+            solve_with_config(_PRG_A_KNOWS_A, preprocessing_level=1),
+            [WorldView([EpistemicLiteral(Function("a", [], True), 0, False)])],
+        )
+
+    def test_preprocessing_unsatisfiable_returns_early(self):
+        # preprocessing detects contradiction → solve() hits the early return (line 62)
+        self.assert_models(
+            solve_with_config(_PRG_UNSAT, preprocessing_level=1),
+            [],
         )
