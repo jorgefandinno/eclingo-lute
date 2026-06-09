@@ -14,8 +14,8 @@ from clingo.symbol import Function, Number, Symbol
 from clingo.symbolic_atoms import SymbolicAtom
 from clingo.theory_atoms import TheoryTermType
 
-from ..reify import ReifiedTheory, ReifiedTheoryTerm, Reifier, reify_program
-from ..theory import evaluate, is_clingo_operator, is_operator
+from eclingo.clingox.reify import ReifiedTheory, ReifiedTheoryTerm, Reifier, reify_program
+from eclingo.clingox.theory import evaluate, is_clingo_operator, is_operator
 
 GRAMMAR = """
 #theory theory {

@@ -8,7 +8,7 @@ from unittest import TestCase
 from clingo import ast
 from clingo.symbol import Function
 
-from ...testing.ast import ASTTestCase, parse_literal, parse_statement, parse_term
+from eclingo.clingox.testing.ast import ASTTestCase, parse_literal, parse_statement, parse_term
 
 LOC = ast.Location(ast.Position("a", 1, 2), ast.Position("a", 1, 2))
 

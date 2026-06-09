@@ -23,8 +23,8 @@ from clingo.ast import (
 
 from clingox.testing.ast import parse_term
 
-from .. import ast
-from ..ast import (
+from eclingo.clingox import ast
+from eclingo.clingox.ast import (
     ASTPredicate,
     TheoryAtomType,
     TheoryParser,

@@ -7,7 +7,7 @@ from unittest import TestCase
 from clingo.control import Control
 from clingo.symbol import String, Symbol
 
-from ..theory import evaluate
+from eclingo.clingox.theory import evaluate
 
 
 def eval_term_sym(s: str) -> Symbol:

@@ -6,7 +6,7 @@ from unittest import TestCase
 
 from clingo.control import Control
 
-from ..solving import approximate
+from eclingo.clingox.solving import approximate
 
 
 class TestSolving(TestCase):

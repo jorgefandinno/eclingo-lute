@@ -8,8 +8,8 @@ from unittest import TestCase
 
 from clingo.symbol import parse_term as parse_symbol
 
-from .. import pprint as pp
-from ..testing.ast import parse_term
+from eclingo.clingox import pprint as pp
+from eclingo.clingox.testing.ast import parse_term
 
 REP = """\
 ast.Function(location=Location(begin=Position(filename='<string>',
