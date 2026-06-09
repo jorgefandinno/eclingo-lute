@@ -17,7 +17,8 @@ from .transformers.theory_parser_epistemic import (
 _CallbackType = Callable[[ast.AST], None]
 
 from clingo.ast import ASTType, Location, Position, parse_string
-from clingox.ast import (
+
+from eclingo.clingox.ast import (
     TheoryParser,
     reify_symbolic_atoms,
     theory_parser_from_definition,

@@ -3,8 +3,8 @@ from typing import Optional, Sequence, cast
 import clingo
 from clingo import Configuration, Function, SolveHandle, Symbol
 from clingo.ast import Sign
-from clingox.backend import SymbolicBackend
 
+from eclingo.clingox.backend import SymbolicBackend
 from eclingo.literals import Literal
 from eclingo.solver.candidate import Candidate
 

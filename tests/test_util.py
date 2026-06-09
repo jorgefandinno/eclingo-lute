@@ -1,7 +1,7 @@
 from unittest import TestCase
 
 import clingo
-from clingox.testing.ast import ASTTestCase
+from eclingo.clingox.testing.ast import ASTTestCase
 
 from eclingo import util
 from eclingo.config import AppConfig

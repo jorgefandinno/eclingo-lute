@@ -12,7 +12,7 @@ import clingo
 import programs
 import programs_helper
 from clingo import Function, Symbol
-from clingox.testing.ast import parse_term
+from eclingo.clingox.testing.ast import parse_term
 from helper_build_programs import (
     _ast_to_symbol,
     ast_to_symbol,

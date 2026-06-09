@@ -21,7 +21,7 @@ from clingo.ast import (
     parse_string,
 )
 
-from clingox.testing.ast import parse_term
+from eclingo.clingox.testing.ast import parse_term
 
 from eclingo.clingox import ast
 from eclingo.clingox.ast import (

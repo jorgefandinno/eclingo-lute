@@ -3,7 +3,7 @@ from typing import Any, MutableMapping, MutableSequence, Sequence
 from unittest import TestCase
 
 from clingo.ast import AST
-from clingox.ast import ast_to_dict
+from eclingo.clingox.ast import ast_to_dict
 
 
 def remove_key_recursively(value: Any, key: Any) -> None:

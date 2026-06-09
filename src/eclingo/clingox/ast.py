@@ -8,7 +8,7 @@ The following examples shows how to construct and use a theory parser:
 
 ```python-repl
 >>> from clingo.ast import TheoryAtomType, parse_string
->>> from clingox.ast import Arity, Associativity, TheoryParser
+>>> from eclingo.clingox.ast import Arity, Associativity, TheoryParser
 >>>
 >>> terms = {"term":
 ...     {("-", Arity.Unary): (3, Associativity.NoAssociativity),
@@ -31,7 +31,7 @@ The same parser can also be constructed from a theory:
 
 ```python-repl
 >>> from clingo.ast import parse_string, ASTType
->>> from clingox.ast import theory_parser_from_definition
+>>> from eclingo.clingox.ast import theory_parser_from_definition
 >>>
 >>> theory = """\\
 ... #theory test {
@@ -68,7 +68,7 @@ Another interesting feature is to convert ASTs to YAML:
 ```python-repl
 >>> from json import dumps
 >>> from clingo.ast import parse_string
->>> from clingox.ast import ast_to_dict
+>>> from eclingo.clingox.ast import ast_to_dict
 >>>
 >>> prg = []
 >>> parse_string('a.', lambda x: prg.append(ast_to_dict(x)))

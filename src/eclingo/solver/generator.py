@@ -3,15 +3,15 @@ from typing import Iterator, Optional, Sequence, Tuple, cast
 
 import clingo
 from clingo import Function, Symbol
-from clingox.backend import SymbolicBackend
 
 from eclingo import util
+from eclingo.clingox.backend import SymbolicBackend
 from eclingo.config import AppConfig
 from eclingo.solver.tester import PreprocessingResult
 
 from .candidate import Assumptions, Candidate
 
-# from clingox.solving import approximate
+# from eclingo.clingox.solving import approximate
 
 current_script_path = Path(__file__).parent
 

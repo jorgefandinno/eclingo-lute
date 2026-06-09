@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from typing import Iterable, List
 
 import clingo
-import clingox
+import eclingo.clingox
 from clingo import Function
-from clingox.testing.ast import parse_term
+from eclingo.clingox.testing.ast import parse_term
 
 from eclingo.solver.candidate import Candidate
 

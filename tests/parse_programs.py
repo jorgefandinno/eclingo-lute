@@ -1,11 +1,11 @@
 import clingo
-import clingox.program
+import eclingo.clingox.program
 
 
 def parse_program(program_str: str):
     control = clingo.Control()
-    program = clingox.program.Program()
-    control.register_observer(clingox.program.ProgramObserver(program))
+    program = eclingo.clingox.program.Program()
+    control.register_observer(eclingo.clingox.program.ProgramObserver(program))
     control.add(program_str)
     control.ground()
     return [f.symbol for f in program.facts]
@@ -16,7 +16,7 @@ def parse_program(program_str: str):
 # program = parse_program("a(1). b(1).")
 # print(program)
 # with control.backend() as backend:
-#     mapping = clingox.program.Remapping(backend, program.output_atoms, program.facts)
+#     mapping = eclingo.clingox.program.Remapping(backend, program.output_atoms, program.facts)
 #     program.add_to_backend(backend, mapping)
 # control.add("c(X) :- a(X).")
 # control.ground()

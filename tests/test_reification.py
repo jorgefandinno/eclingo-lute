@@ -1,5 +1,5 @@
 from clingo import ast
-from clingox.testing.ast import ASTTestCase
+from eclingo.clingox.testing.ast import ASTTestCase
 
 from eclingo.config import AppConfig
 from eclingo.parsing import parser

@@ -1,7 +1,7 @@
 import unittest
 
 import clingo
-from clingox.program import Program, ProgramObserver, Remapping
+from eclingo.clingox.program import Program, ProgramObserver, Remapping
 
 from eclingo.solver.tester import CandidateTester
 

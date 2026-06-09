@@ -15,7 +15,7 @@ The following example shows how to:
 
 ```python-repl
 >>> from clingo.control import Control
->>> from clingox.program import Program, ProgramObserver, Remapping
+>>> from eclingo.clingox.program import Program, ProgramObserver, Remapping
 >>>
 >>> prg = Program()
 >>> ctl_a = Control()

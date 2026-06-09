@@ -10,7 +10,7 @@ from typing import Iterable, List, NamedTuple, Optional, Tuple, Union
 
 import clingo
 from clingo import Function, Symbol
-from clingox.testing.ast import parse_term
+from eclingo.clingox.testing.ast import parse_term
 
 from eclingo.solver.candidate import Assumptions, Candidate
 

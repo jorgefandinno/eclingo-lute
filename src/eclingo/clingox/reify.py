@@ -13,7 +13,7 @@ Examples
 The following example uses the `reify_program` function to reify a program:
 
 ```python-repl
->>> from clingox.reify import reify_program
+>>> from eclingo.clingox.reify import reify_program
 >>> prg = 'b :- a. {a}.'
 >>> symbols = reify_program(prg)
 >>> print([str(sym) for sym in symbols])
@@ -26,12 +26,12 @@ The following example uses the `reify_program` function to reify a program:
 The last example shows how to use the `ReifiedTheory` class.
 
 ```python-repl
->>> from clingox.reify import ReifiedTheory, reify_program
+>>> from eclingo.clingox.reify import ReifiedTheory, reify_program
 >>> prg = '#theory theory { t { }; &p/0 : t, any }. &p { t }.'
 >>> thy = ReifiedTheory(reify_program(prg))
 >>> print([str(atm) for atm in thy])
 ['&p { t: literal_tuple(0) }']
->>> from clingox.theory import evaluate
+>>> from eclingo.clingox.theory import evaluate
 >>> evaluate(next(iter(thy)).term)
 Function('p', [], True)
 ```

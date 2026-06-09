@@ -7,7 +7,7 @@ from unittest import TestCase
 
 from clingo import Control, Function, HeuristicType, TruthValue
 
-from clingox.program import (
+from eclingo.clingox.program import (
     Edge,
     External,
     Fact,

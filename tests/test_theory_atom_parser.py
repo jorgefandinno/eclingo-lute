@@ -13,7 +13,7 @@ from clingo.ast import (
     parse_string,
 )
 from clingo.symbol import Function
-from clingox.ast import theory_parser_from_definition
+from eclingo.clingox.ast import theory_parser_from_definition
 
 theory = """#theory eclingo {
     term { not : 0, unary;

@@ -3,9 +3,9 @@ from typing import Dict, List, Sequence, Tuple
 from clingo import Symbol
 from clingo.ast import ProgramBuilder
 from clingo.control import Control
-from clingox import program as clingox_program
-from clingox.reify import Reifier
 
+from eclingo.clingox import program as clingox_program
+from eclingo.clingox.reify import Reifier
 from eclingo.config import AppConfig
 
 from .parsing.parser import parse_program

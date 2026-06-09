@@ -7,12 +7,12 @@ from typing import Iterable, List, Set, Tuple, Union, cast
 
 from clingo import ast
 from clingo.ast import AST, ASTSequence, Sign, TheoryFunction, Transformer
-from clingox.ast import (
+
+from eclingo.clingox.ast import (
     filter_body_literals,
     reify_symbolic_atoms,
     theory_term_to_literal,
 )
-
 from eclingo.parsing.transformers.astutil import negate_literal
 
 from .parser_negations import (

@@ -6,7 +6,7 @@ Example
 
 ```python-repl
 >>> from clingo.control import Control
->>> from clingox.theory import evaluate
+>>> from eclingo.clingox.theory import evaluate
 >>>
 >>> prg = """\
 ... #theory test {

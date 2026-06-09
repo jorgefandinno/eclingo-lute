@@ -7,7 +7,8 @@ from typing import Any, List, cast
 from unittest import TestCase
 
 from clingo.ast import AST, ASTType, parse_string
-from clingox.pprint import pformat
+
+from eclingo.clingox.pprint import pformat
 
 __all__ = [
     "ASTTestCase",

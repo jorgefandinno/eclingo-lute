@@ -72,10 +72,10 @@ def test_clingox(session: nox.Session):
     session.install("coverage", external=IS_GITHUB)
     session.install("-e", ".", external=IS_GITHUB)
     session.run(
-        "python",
-        # "run",
-        # "--data-file",
-        # ".coverage_fast",
+        "coverage",
+        "run",
+        "--data-file",
+        ".coverage_clingox",
         "-m",
         "unittest",
         "tests/clingox/testing/test_ast.py",
@@ -119,6 +119,7 @@ def coverage(session: nox.Session):
         "combine",
         ".coverage_fast",
         ".coverage_slow",
+        ".coverage_clingox",
         external=IS_GITHUB,
     )
     session.run(

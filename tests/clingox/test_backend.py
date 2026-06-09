@@ -6,8 +6,8 @@ from unittest import TestCase
 
 from clingo import Control, Function, HeuristicType, TruthValue
 
-from clingox.backend import SymbolicBackend
-from clingox.program import Program, ProgramObserver
+from eclingo.clingox.backend import SymbolicBackend
+from eclingo.clingox.program import Program, ProgramObserver
 
 
 class TestSymbolicBackend(TestCase):
