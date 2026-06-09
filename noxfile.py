@@ -59,6 +59,7 @@ def tests(session: nox.Session):
         "tests/test_worldview_builder_reification.py",
         "tests/test_tester_reification.py",
         "tests/test_theory_atom_parser.py",
+        "tests/test_astutil.py",
         "tests/test_transformers.py",
         "tests/test_util.py",
         "tests/test_preprocessor.py",

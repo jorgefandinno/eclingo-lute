@@ -5,9 +5,15 @@ Simple tests for term evaluation.
 from unittest import TestCase
 
 from clingo.control import Control
-from clingo.symbol import String, Symbol
+from clingo.symbol import Function, Number, String, Symbol, Tuple_
 
-from eclingo.clingox.theory import evaluate
+from eclingo.clingox.theory import (
+    evaluate,
+    invert_symbol,
+    is_clingo_operator,
+    is_operator,
+    require_number,
+)
 
 
 def eval_term_sym(s: str) -> Symbol:
@@ -89,6 +95,21 @@ class TestTheory(TestCase):
         """
         self.assertEqual(eval_term_sym('"a\\\\b\\nc\\"d"'), String('a\\b\nc"d'))
 
+    def test_tuple(self):
+        """
+        Test evaluation of tuple terms.
+        """
+        self.assertEqual(eval_term("(1,2)"), "(1,2)")
+        self.assertEqual(eval_term("(1,2,3)"), "(1,2,3)")
+        self.assertEqual(eval_term("(1+1,2*3)"), "(2,6)")
+
+    def test_list_error(self):
+        """
+        Test that list terms raise a RuntimeError.
+        """
+        self.assertRaises(RuntimeError, eval_term, "[1]")
+        self.assertRaises(RuntimeError, eval_term, "[1,2]")
+
     def test_error(self):
         """
         Test failed term evaluation.
@@ -100,3 +121,84 @@ class TestTheory(TestCase):
         self.assertRaises(AttributeError, eval_term, "1?2")
         self.assertRaises(ZeroDivisionError, eval_term, "1\\0")
         self.assertRaises(ZeroDivisionError, eval_term, "1/0")
+
+
+class TestRequireNumber(TestCase):
+    def test_number(self):
+        self.assertEqual(require_number(Number(5)), 5)
+        self.assertEqual(require_number(Number(-3)), -3)
+        self.assertEqual(require_number(Number(0)), 0)
+
+    def test_non_number(self):
+        self.assertRaises(TypeError, require_number, Function("a"))
+        self.assertRaises(TypeError, require_number, String("hello"))
+
+
+class TestInvertSymbol(TestCase):
+    def test_number(self):
+        self.assertEqual(invert_symbol(Number(5)), Number(-5))
+        self.assertEqual(invert_symbol(Number(-3)), Number(3))
+        self.assertEqual(invert_symbol(Number(0)), Number(0))
+
+    def test_positive_function(self):
+        self.assertEqual(
+            invert_symbol(Function("a", [], True)), Function("a", [], False)
+        )
+        self.assertEqual(
+            invert_symbol(Function("f", [Number(1)], True)),
+            Function("f", [Number(1)], False),
+        )
+
+    def test_negative_function(self):
+        self.assertEqual(
+            invert_symbol(Function("a", [], False)), Function("a", [], True)
+        )
+
+    def test_error(self):
+        self.assertRaises(TypeError, invert_symbol, String("hello"))
+        self.assertRaises(TypeError, invert_symbol, Tuple_([Number(1), Number(2)]))
+        self.assertRaises(TypeError, invert_symbol, Function("", [], True))
+
+
+class TestIsOperator(TestCase):
+    def test_symbol_operators(self):
+        for op in (
+            "+",
+            "-",
+            "*",
+            "/",
+            "\\",
+            "**",
+            "<",
+            "<=",
+            "==",
+            "!=",
+            "?",
+            "&",
+            "@",
+            "|",
+        ):
+            self.assertTrue(is_operator(op), msg=f"expected {op!r} to be an operator")
+
+    def test_not_keyword(self):
+        self.assertTrue(is_operator("not"))
+
+    def test_non_operators(self):
+        self.assertFalse(is_operator("f"))
+        self.assertFalse(is_operator("abc"))
+        self.assertFalse(is_operator(""))
+
+
+class TestIsClingo_operator(TestCase):
+    def test_clingo_operators(self):
+        for op in ("+", "-", "*", "/", "\\"):
+            self.assertTrue(
+                is_clingo_operator(op), msg=f"expected {op!r} to be a clingo operator"
+            )
+
+    def test_non_clingo_operators(self):
+        self.assertFalse(is_clingo_operator("**"))
+        self.assertFalse(is_clingo_operator("?"))
+        self.assertFalse(is_clingo_operator("not"))
+        self.assertFalse(is_clingo_operator("f"))
+        self.assertFalse(is_clingo_operator(""))
