@@ -10,41 +10,41 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Requires `clingo` installed via conda:
 ```bash
-conda create --name eclingo python=3.12
-conda activate eclingo
-conda install -c potassco clingo=5.7.1
+conda activate clingo5
 pip install -e .[dev]
-conda deactivate && conda activate eclingo
 ```
 
 ## Commands
 
 ### Testing
+
+All commands below must be run inside the `clingo5` conda environment (or via its full path `/home/jorge/miniconda3/envs/clingo5/bin/nox`):
+
 ```bash
 # Run all fast tests (recommended during development)
-nox -Rs tests
+/home/jorge/miniconda3/envs/clingo5/bin/nox -Rs tests
 
 # Run slow tests (integration/example tests)
-nox -Rs slow_tests
+/home/jorge/miniconda3/envs/clingo5/bin/nox -Rs slow_tests
 
 # Run all tests + coverage (fails under 99%)
-nox -Rs all_tests
+/home/jorge/miniconda3/envs/clingo5/bin/nox -Rs all_tests
 
 # Run a single test file directly
-python -m unittest tests/test_eclingo.py -v
+/home/jorge/miniconda3/envs/clingo5/bin/python -m unittest tests/test_eclingo.py -v
 
 # Run a single test class
-python -m unittest tests.test_eclingo.TestEclingoGround -v
+/home/jorge/miniconda3/envs/clingo5/bin/python -m unittest tests.test_eclingo.TestEclingoGround -v
 ```
 
 Note: `nox -r` skips recreating virtual environments (faster subsequent runs).
 
 ### Code Quality
 ```bash
-nox -rs format          # auto-format with black + isort
-nox -rs typecheck       # run mypy
-nox -rs pylint          # run pylint
-nox -rs lint_flake8     # run flake8
+/home/jorge/miniconda3/envs/clingo5/bin/nox -rs format          # auto-format with black + isort
+/home/jorge/miniconda3/envs/clingo5/bin/nox -rs typecheck       # run mypy
+/home/jorge/miniconda3/envs/clingo5/bin/nox -rs pylint          # run pylint
+/home/jorge/miniconda3/envs/clingo5/bin/nox -rs lint_flake8     # run flake8
 ```
 
 ### Running eclingo
