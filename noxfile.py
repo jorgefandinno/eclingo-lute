@@ -67,6 +67,23 @@ def tests(session: nox.Session):
         external=IS_GITHUB,
     )
 
+@nox.session(python=None)
+def test_clingox(session: nox.Session):
+    session.install("coverage", external=IS_GITHUB)
+    session.install("-e", ".", external=IS_GITHUB)
+    session.run(
+        "python",
+        # "run",
+        # "--data-file",
+        # ".coverage_fast",
+        "-m",
+        "unittest",
+        "-k",
+        "tests/clingox/**/test_*.py",
+        "-v",
+        external=IS_GITHUB,
+    )
+
 
 @nox.session(python=None)
 def slow_tests(session: nox.Session):
