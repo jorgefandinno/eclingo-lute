@@ -9,12 +9,9 @@ from unittest import TestCase
 
 import clingo
 from clingo.symbol import Function, Number
+from clingo.core import Location, Position
 from clingo.ast import (
-    AST,
     AggregateFunction,
-    ASTType,
-    Location,
-    Position,
     Sign,
     Transformer,
     Variable,
