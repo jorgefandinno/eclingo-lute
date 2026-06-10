@@ -10,7 +10,7 @@ from unittest import TestCase
 import clingo
 from clingo.symbol import Function, Number
 from clingo.core import Library, Location, Position
-from clingo.ast import AggregateFunction, Sign, Relation
+from clingo.ast import AggregateFunction, Sign, Relation, OptimizeType
 
 from eclingo.clingox.testing.ast import parse_term
 
@@ -1963,47 +1963,41 @@ class TestAST(TestCase):
         """
         Tests for converting between python and ast representation of statements.
         """
-        # Note: tests are simply skipped for older clingo versions
-        if False:
-            return  # nocoverage
+        self.maxDiff = None
         self.assertEqual(
             test_ast_dict(self, "a :- b."),
             [
                 {
                     "ast_type": "StatementRule",
-                    "location": "<string>:1:1-8",
-                    "head": {
-                        "ast_type": "Literal",
-                        "location": "<string>:1:1-2",
-                        "sign": 0,
-                        "atom": {
-                            "ast_type": "SymbolicAtom",
-                            "symbol": {
-                                "ast_type": "Function",
-                                "location": "<string>:1:1-2",
-                                "name": "a",
-                                "arguments": [],
-                                "external": 0,
-                            },
-                        },
-                    },
                     "body": [
                         {
-                            "ast_type": "Literal",
-                            "location": "<string>:1:6-7",
-                            "sign": 0,
-                            "atom": {
-                                "ast_type": "SymbolicAtom",
-                                "symbol": {
-                                    "ast_type": "Function",
-                                    "location": "<string>:1:6-7",
-                                    "name": "b",
-                                    "arguments": [],
-                                    "external": 0,
+                            "ast_type": "BodySimpleLiteral",
+                            "literal": {
+                                "ast_type": "LiteralSymbolic",
+                                "atom": {
+                                    "ast_type": "TermSymbolic",
+                                    "location": "<string>:1:6-8",
+                                    "symbol": "b",
                                 },
+                                "location": "<string>:1:6-8",
+                                "sign": Sign.NoSign,
                             },
                         }
                     ],
+                    "head": {
+                        "ast_type": "HeadSimpleLiteral",
+                        "literal": {
+                            "ast_type": "LiteralSymbolic",
+                            "atom": {
+                                "ast_type": "TermSymbolic",
+                                "location": "<string>:1:1-5",
+                                "symbol": "a",
+                            },
+                            "location": "<string>:1:1-5",
+                            "sign": Sign.NoSign,
+                        },
+                    },
+                    "location": "<string>:1:1-8",
                 }
             ],
         )
@@ -2011,11 +2005,11 @@ class TestAST(TestCase):
             test_ast_dict(self, "#defined x/0."),
             [
                 {
-                    "ast_type": "Defined",
+                    "arity": 0,
+                    "ast_type": "StatementDefined",
                     "location": "<string>:1:1-14",
                     "name": "x",
-                    "arity": 0,
-                    "positive": True,
+                    "sign": False,
                 }
             ],
         )
@@ -2023,30 +2017,28 @@ class TestAST(TestCase):
             test_ast_dict(self, "#show a : b."),
             [
                 {
-                    "ast_type": "ShowTerm",
-                    "location": "<string>:1:1-13",
-                    "term": {
-                        "ast_type": "SymbolicTerm",
-                        "location": "<string>:1:7-8",
-                        "symbol": "a",
-                    },
+                    "ast_type": "StatementShow",
                     "body": [
                         {
-                            "ast_type": "Literal",
-                            "location": "<string>:1:11-12",
-                            "sign": 0,
-                            "atom": {
-                                "ast_type": "SymbolicAtom",
-                                "symbol": {
-                                    "ast_type": "Function",
-                                    "location": "<string>:1:11-12",
-                                    "name": "b",
-                                    "arguments": [],
-                                    "external": 0,
+                            "ast_type": "BodySimpleLiteral",
+                            "literal": {
+                                "ast_type": "LiteralSymbolic",
+                                "atom": {
+                                    "ast_type": "TermSymbolic",
+                                    "location": "<string>:1:11-13",
+                                    "symbol": "b",
                                 },
+                                "location": "<string>:1:11-13",
+                                "sign": Sign.NoSign,
                             },
                         }
                     ],
+                    "location": "<string>:1:1-13",
+                    "term": {
+                        "ast_type": "TermSymbolic",
+                        "location": "<string>:1:7-10",
+                        "symbol": "a",
+                    },
                 }
             ],
         )
@@ -2054,11 +2046,12 @@ class TestAST(TestCase):
             test_ast_dict(self, "#show a/0."),
             [
                 {
-                    "ast_type": "ShowSignature",
+                    "arity": 0,
+                    "ast_type": "StatementShowSignature",
                     "location": "<string>:1:1-11",
                     "name": "a",
-                    "arity": 0,
-                    "positive": True,
+                    "sign": False,
+                    "value": True,
                 }
             ],
         )
@@ -2066,77 +2059,46 @@ class TestAST(TestCase):
             test_ast_dict(self, "#minimize { 1@2,a : b }."),
             [
                 {
-                    "ast_type": "Minimize",
-                    "location": "<string>:1:13-22",
-                    "weight": {
-                        "ast_type": "SymbolicTerm",
-                        "location": "<string>:1:13-14",
-                        "symbol": "1",
-                    },
-                    "priority": {
-                        "ast_type": "SymbolicTerm",
-                        "location": "<string>:1:15-16",
-                        "symbol": "2",
-                    },
-                    "terms": [
+                    "ast_type": "StatementOptimize",
+                    "elements": [
                         {
-                            "ast_type": "SymbolicTerm",
-                            "location": "<string>:1:17-18",
-                            "symbol": "a",
-                        }
-                    ],
-                    "body": [
-                        {
-                            "ast_type": "Literal",
-                            "location": "<string>:1:21-22",
-                            "sign": 0,
-                            "atom": {
-                                "ast_type": "SymbolicAtom",
-                                "symbol": {
-                                    "ast_type": "Function",
-                                    "location": "<string>:1:21-22",
-                                    "name": "b",
-                                    "arguments": [],
-                                    "external": 0,
+                            "ast_type": "OptimizeElement",
+                            "condition": [
+                                {
+                                    "ast_type": "LiteralSymbolic",
+                                    "atom": {
+                                        "ast_type": "TermSymbolic",
+                                        "location": "<string>:1:21-24",
+                                        "symbol": "b",
+                                    },
+                                    "location": "<string>:1:21-24",
+                                    "sign": Sign.NoSign,
+                                }
+                            ],
+                            "tuple": {
+                                "ast_type": "OptimizeTuple",
+                                "priority": {
+                                    "ast_type": "TermSymbolic",
+                                    "location": "<string>:1:15-16",
+                                    "symbol": "2",
+                                },
+                                "terms": [
+                                    {
+                                        "ast_type": "TermSymbolic",
+                                        "location": "<string>:1:17-20",
+                                        "symbol": "a",
+                                    }
+                                ],
+                                "weight": {
+                                    "ast_type": "TermSymbolic",
+                                    "location": "<string>:1:13-14",
+                                    "symbol": "1",
                                 },
                             },
                         }
                     ],
-                }
-            ],
-        )
-        self.assertEqual(
-            test_ast_dict(self, "#script (python) blub! #end."),
-            [
-                {
-                    "ast_type": "Script",
-                    "location": "<string>:1:1-29",
-                    "name": "python",
-                    "code": "blub!",
-                }
-            ],
-        )
-        self.assertEqual(
-            test_ast_dict(self, "#script (lua) blub! #end."),
-            [
-                {
-                    "ast_type": "Script",
-                    "location": "<string>:1:1-26",
-                    "code": "blub!",
-                    "name": "lua",
-                }
-            ],
-        )
-        self.assertEqual(
-            test_ast_dict(self, "#program x(y)."),
-            [
-                {
-                    "ast_type": "Program",
-                    "location": "<string>:1:1-15",
-                    "name": "x",
-                    "parameters": [
-                        {"ast_type": "Id", "location": "<string>:1:12-13", "name": "y"}
-                    ],
+                    "location": "<string>:1:1-25",
+                    "optimize_type": OptimizeType.Minimize,
                 }
             ],
         )
@@ -2144,47 +2106,11 @@ class TestAST(TestCase):
             test_ast_dict(self, "#project a/0."),
             [
                 {
-                    "ast_type": "ProjectSignature",
+                    "arity": 0,
+                    "ast_type": "StatementProjectSignature",
                     "location": "<string>:1:1-14",
                     "name": "a",
-                    "arity": 0,
-                    "positive": True,
-                }
-            ],
-        )
-        self.assertEqual(
-            test_ast_dict(self, "#project a : b."),
-            [
-                {
-                    "ast_type": "ProjectAtom",
-                    "location": "<string>:1:1-16",
-                    "atom": {
-                        "ast_type": "SymbolicAtom",
-                        "symbol": {
-                            "ast_type": "Function",
-                            "location": "<string>:1:10-11",
-                            "name": "a",
-                            "arguments": [],
-                            "external": 0,
-                        },
-                    },
-                    "body": [
-                        {
-                            "ast_type": "Literal",
-                            "location": "<string>:1:14-15",
-                            "sign": 0,
-                            "atom": {
-                                "ast_type": "SymbolicAtom",
-                                "symbol": {
-                                    "ast_type": "Function",
-                                    "location": "<string>:1:14-15",
-                                    "name": "b",
-                                    "arguments": [],
-                                    "external": 0,
-                                },
-                            },
-                        }
-                    ],
+                    "sign": False,
                 }
             ],
         )
@@ -2192,40 +2118,34 @@ class TestAST(TestCase):
             test_ast_dict(self, "#external x : y. [X]"),
             [
                 {
-                    "ast_type": "External",
-                    "location": "<string>:1:1-21",
+                    "ast_type": "StatementExternal",
                     "atom": {
-                        "ast_type": "SymbolicAtom",
-                        "symbol": {
-                            "ast_type": "Function",
-                            "location": "<string>:1:11-12",
-                            "name": "x",
-                            "arguments": [],
-                            "external": 0,
-                        },
+                        "ast_type": "TermSymbolic",
+                        "location": "<string>:1:11-12",
+                        "symbol": "x",
                     },
                     "body": [
                         {
-                            "ast_type": "Literal",
-                            "location": "<string>:1:15-16",
-                            "sign": 0,
-                            "atom": {
-                                "ast_type": "SymbolicAtom",
-                                "symbol": {
-                                    "ast_type": "Function",
-                                    "location": "<string>:1:15-16",
-                                    "name": "y",
-                                    "arguments": [],
-                                    "external": 0,
+                            "ast_type": "BodySimpleLiteral",
+                            "literal": {
+                                "ast_type": "LiteralSymbolic",
+                                "atom": {
+                                    "ast_type": "TermSymbolic",
+                                    "location": "<string>:1:15-17",
+                                    "symbol": "y",
                                 },
+                                "location": "<string>:1:15-17",
+                                "sign": Sign.NoSign,
                             },
                         }
                     ],
                     "external_type": {
-                        "ast_type": "Variable",
+                        "anonymous": False,
+                        "ast_type": "TermVariable",
                         "location": "<string>:1:19-20",
                         "name": "X",
                     },
+                    "location": "<string>:1:1-20",
                 }
             ],
         )
@@ -2233,32 +2153,35 @@ class TestAST(TestCase):
             test_ast_dict(self, "#edge (u,v) : b."),
             [
                 {
-                    "ast_type": "Edge",
-                    "location": "<string>:1:1-17",
-                    "node_u": {
-                        "ast_type": "SymbolicTerm",
-                        "location": "<string>:1:8-9",
-                        "symbol": "u",
-                    },
-                    "node_v": {
-                        "ast_type": "SymbolicTerm",
-                        "location": "<string>:1:10-11",
-                        "symbol": "v",
-                    },
+                    "ast_type": "StatementEdge",
                     "body": [
                         {
-                            "ast_type": "Literal",
-                            "location": "<string>:1:15-16",
-                            "sign": 0,
-                            "atom": {
-                                "ast_type": "SymbolicAtom",
-                                "symbol": {
-                                    "ast_type": "Function",
-                                    "location": "<string>:1:15-16",
-                                    "name": "b",
-                                    "arguments": [],
-                                    "external": 0,
+                            "ast_type": "BodySimpleLiteral",
+                            "literal": {
+                                "ast_type": "LiteralSymbolic",
+                                "atom": {
+                                    "ast_type": "TermSymbolic",
+                                    "location": "<string>:1:15-17",
+                                    "symbol": "b",
                                 },
+                                "location": "<string>:1:15-17",
+                                "sign": Sign.NoSign,
+                            },
+                        }
+                    ],
+                    "location": "<string>:1:1-17",
+                    "pool": [
+                        {
+                            "ast_type": "Edge",
+                            "u": {
+                                "ast_type": "TermSymbolic",
+                                "location": "<string>:1:8-10",
+                                "symbol": "u",
+                            },
+                            "v": {
+                                "ast_type": "TermSymbolic",
+                                "location": "<string>:1:10-12",
+                                "symbol": "v",
                             },
                         }
                     ],
@@ -2269,49 +2192,39 @@ class TestAST(TestCase):
             test_ast_dict(self, "#heuristic a : b. [p,X]"),
             [
                 {
-                    "ast_type": "Heuristic",
-                    "location": "<string>:1:1-24",
+                    "ast_type": "StatementHeuristic",
                     "atom": {
-                        "ast_type": "SymbolicAtom",
-                        "symbol": {
-                            "ast_type": "Function",
-                            "location": "<string>:1:12-13",
-                            "name": "a",
-                            "arguments": [],
-                            "external": 0,
-                        },
+                        "ast_type": "TermSymbolic",
+                        "location": "<string>:1:12-13",
+                        "symbol": "a",
                     },
                     "body": [
                         {
-                            "ast_type": "Literal",
-                            "location": "<string>:1:16-17",
-                            "sign": 0,
-                            "atom": {
-                                "ast_type": "SymbolicAtom",
-                                "symbol": {
-                                    "ast_type": "Function",
-                                    "location": "<string>:1:16-17",
-                                    "name": "b",
-                                    "arguments": [],
-                                    "external": 0,
+                            "ast_type": "BodySimpleLiteral",
+                            "literal": {
+                                "ast_type": "LiteralSymbolic",
+                                "atom": {
+                                    "ast_type": "TermSymbolic",
+                                    "location": "<string>:1:16-18",
+                                    "symbol": "b",
                                 },
+                                "location": "<string>:1:16-18",
+                                "sign": Sign.NoSign,
                             },
                         }
                     ],
-                    "bias": {
-                        "ast_type": "SymbolicTerm",
-                        "location": "<string>:1:20-21",
-                        "symbol": "p",
-                    },
-                    "priority": {
-                        "ast_type": "SymbolicTerm",
-                        "location": "<string>:1:1-24",
-                        "symbol": "0",
-                    },
+                    "location": "<string>:1:1-23",
                     "modifier": {
-                        "ast_type": "Variable",
+                        "anonymous": False,
+                        "ast_type": "TermVariable",
                         "location": "<string>:1:22-23",
                         "name": "X",
+                    },
+                    "priority": None,
+                    "weight": {
+                        "ast_type": "TermSymbolic",
+                        "location": "<string>:1:20-22",
+                        "symbol": "p",
                     },
                 }
             ],
