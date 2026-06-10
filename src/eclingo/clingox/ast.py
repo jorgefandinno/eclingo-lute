@@ -1144,28 +1144,28 @@ def _encode_symbol(x: Symbol) -> str:
 def _encode_int(x: int) -> int:
     return x
 
-SIGN_STRINGS = {
-    Sign.NoSign: "Sign.NoSign",
-    Sign.Negation: "Sign.Negation",
-    Sign.DoubleNegation: "Sign.DoubleNegation",
-}
+# SIGN_STRINGS = {
+#     Sign.NoSign: "Sign.NoSign",
+#     Sign.Negation: "Sign.Negation",
+#     Sign.DoubleNegation: "Sign.DoubleNegation",
+# }
 
 @_encode.register(Sign)
-def _encode_sign(x: Sign) -> str:
-    return SIGN_STRINGS[x]
+def _encode_sign(x: Sign) -> Sign:
+    return x
 
-RELATION_STRINGS = {
-    Relation.Equal: "Relation.Equal",
-    Relation.NotEqual: "Relation.NotEqual",
-    Relation.Less: "Relation.Less",
-    Relation.LessEqual: "Relation.LessEqual",
-    Relation.Greater: "Relation.Greater",
-    Relation.GreaterEqual: "Relation.GreaterEqual",
-}
+# RELATION_STRINGS = {
+#     Relation.Equal: "Relation.Equal",
+#     Relation.NotEqual: "Relation.NotEqual",
+#     Relation.Less: "Relation.Less",
+#     Relation.LessEqual: "Relation.LessEqual",
+#     Relation.Greater: "Relation.Greater",
+#     Relation.GreaterEqual: "Relation.GreaterEqual",
+# }
 
 @_encode.register(Relation)
-def _encode_relation(x: Relation) -> str:
-    return RELATION_STRINGS[x]
+def _encode_relation(x: Relation) -> Relation:
+    return x
 
 
 @_encode.register(ASTSequence)

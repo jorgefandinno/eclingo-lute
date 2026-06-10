@@ -1083,7 +1083,7 @@ class TestAST(TestCase):
                                 "symbol": "a",
                             },
                             "location": "<string>:1:1-3",
-                            "sign": "Sign.NoSign",
+                            "sign": Sign.NoSign,
                         },
                     },
                     "location": "<string>:1:1-3",
@@ -1106,7 +1106,7 @@ class TestAST(TestCase):
                                 "symbol": "a",
                             },
                             "location": "<string>:1:1-7",
-                            "sign": "Sign.Negation",
+                            "sign": Sign.Negation,
                         },
                     },
                     "location": "<string>:1:1-7",
@@ -1129,7 +1129,7 @@ class TestAST(TestCase):
                                 "symbol": "a",
                             },
                             "location": "<string>:1:1-11",
-                            "sign": "Sign.DoubleNegation",
+                            "sign": Sign.DoubleNegation,
                         },
                     },
                     "location": "<string>:1:1-11",
@@ -1163,7 +1163,7 @@ class TestAST(TestCase):
                                     },
                                 }
                             ],
-                            "sign": "Sign.NoSign",
+                            "sign": Sign.NoSign,
                         },
                     },
                     "location": "<string>:1:1-8",
@@ -1197,7 +1197,7 @@ class TestAST(TestCase):
                                     },
                                 }
                             ],
-                            "sign": "Sign.NoSign",
+                            "sign": Sign.NoSign,
                         },
                     },
                     "location": "<string>:1:1-7",
@@ -1231,7 +1231,7 @@ class TestAST(TestCase):
                                     },
                                 }
                             ],
-                            "sign": "Sign.NoSign",
+                            "sign": Sign.NoSign,
                         },
                     },
                     "location": "<string>:1:1-8",
@@ -1266,7 +1266,7 @@ class TestAST(TestCase):
                                     },
                                 }
                             ],
-                            "sign": "Sign.NoSign",
+                            "sign": Sign.NoSign,
                         },
                     },
                     "location": "<string>:1:1-7",
@@ -1300,7 +1300,7 @@ class TestAST(TestCase):
                                     },
                                 }
                             ],
-                            "sign": "Sign.NoSign",
+                            "sign": Sign.NoSign,
                         },
                     },
                     "location": "<string>:1:1-7",
@@ -1334,7 +1334,7 @@ class TestAST(TestCase):
                                     },
                                 }
                             ],
-                            "sign": "Sign.NoSign",
+                            "sign": Sign.NoSign,
                         },
                     },
                     "location": "<string>:1:1-8",
@@ -1361,7 +1361,7 @@ class TestAST(TestCase):
                                             "symbol": "b",
                                         },
                                         "location": "<string>:1:5-7",
-                                        "sign": "Sign.NoSign",
+                                        "sign": Sign.NoSign,
                                     }
                                 ],
                                 "literal": {
@@ -1372,7 +1372,7 @@ class TestAST(TestCase):
                                         "symbol": "a",
                                     },
                                     "location": "<string>:1:1-4",
-                                    "sign": "Sign.NoSign",
+                                    "sign": Sign.NoSign,
                                 },
                                 "location": "<string>:1:1-7",
                             }
@@ -1400,7 +1400,7 @@ class TestAST(TestCase):
                                         "symbol": "b",
                                     },
                                     "location": "<string>:1:8-10",
-                                    "sign": "Sign.NoSign",
+                                    "sign": Sign.NoSign,
                                 }
                             ],
                             "literal": {
@@ -1411,7 +1411,7 @@ class TestAST(TestCase):
                                     "symbol": "a",
                                 },
                                 "location": "<string>:1:4-7",
-                                "sign": "Sign.NoSign",
+                                "sign": Sign.NoSign,
                             },
                             "location": "<string>:1:4-10",
                         }
@@ -1421,7 +1421,7 @@ class TestAST(TestCase):
                         "literal": {
                             "ast_type": "LiteralBoolean",
                             "location": "<string>:1:10-11",
-                            "sign": "Sign.NoSign",
+                            "sign": Sign.NoSign,
                             "value": False,
                         },
                     },
@@ -1449,7 +1449,7 @@ class TestAST(TestCase):
                                             "symbol": "b",
                                         },
                                         "location": "<string>:1:11-13",
-                                        "sign": "Sign.NoSign",
+                                        "sign": Sign.NoSign,
                                     }
                                 ],
                                 "literal": {
@@ -1460,7 +1460,7 @@ class TestAST(TestCase):
                                         "symbol": "a",
                                     },
                                     "location": "<string>:1:9-11",
-                                    "sign": "Sign.NoSign",
+                                    "sign": Sign.NoSign,
                                 },
                                 "location": "<string>:1:8-13",
                                 "tuple": [
@@ -1509,7 +1509,7 @@ class TestAST(TestCase):
                                                 "symbol": "b",
                                             },
                                             "location": "<string>:1:12-14",
-                                            "sign": "Sign.NoSign",
+                                            "sign": Sign.NoSign,
                                         }
                                     ],
                                     "location": "<string>:1:10-14",
@@ -1534,7 +1534,7 @@ class TestAST(TestCase):
                                     "symbol": "2",
                                 },
                             },
-                            "sign": "Sign.NoSign",
+                            "sign": Sign.NoSign,
                         }
                     ],
                     "head": {
@@ -1542,7 +1542,7 @@ class TestAST(TestCase):
                         "literal": {
                             "ast_type": "LiteralBoolean",
                             "location": "<string>:1:20-21",
-                            "sign": "Sign.NoSign",
+                            "sign": Sign.NoSign,
                             "value": False,
                         },
                     },
