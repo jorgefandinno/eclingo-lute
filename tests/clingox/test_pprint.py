@@ -66,7 +66,9 @@ class TestPPrint(TestCase):
         """
         Test pprint functions for symbols.
         """
-        self.assertEqual(pp.pformat(parse_symbol(lib, 'f(#sup,#inf,a,"b",(1,2))')), SYM_REP1)
+        self.assertEqual(
+            pp.pformat(parse_symbol(lib, 'f(#sup,#inf,a,"b",(1,2))')), SYM_REP1
+        )
         self.assertEqual(
             pp.pformat(parse_symbol(lib, "f(f(f(f(f(f(f(1000000000)))))))")), SYM_REP2
         )

@@ -393,8 +393,7 @@ class TestProgram(TestCase):
         Test observer together with a control object.
         """
         ctl = Control(lib, [])
-        ctl.parse_string(
-            """\
+        ctl.parse_string("""\
             b.
             {c}.
             a :- b, not c.
@@ -402,8 +401,7 @@ class TestProgram(TestCase):
             #project a.
             #project b.
             #external a.
-            """
-        )
+            """)
         ctl.ground()
         ctl.observe(self.obs)
 

@@ -193,7 +193,9 @@ class TestReifier(TestCase):
     Tests for the Reifier.
     """
 
-    @skip("clingo 6 changed reify output format (outputAtom vs output); comparison not valid")
+    @skip(
+        "clingo 6 changed reify output format (outputAtom vs output); comparison not valid"
+    )
     def test_incremental(self):
         """
         Test incremental reification.
@@ -207,7 +209,9 @@ class TestReifier(TestCase):
             set(_reify_check(_incremental, True, True)),
         )
 
-    @skip("clingo 6 changed reify output format (outputAtom vs output); comparison not valid")
+    @skip(
+        "clingo 6 changed reify output format (outputAtom vs output); comparison not valid"
+    )
     def test_reify(self):
         """
         Test reification of different language elements.

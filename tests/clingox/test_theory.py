@@ -24,8 +24,7 @@ def eval_term_sym(s: str) -> Symbol:
     Evaluate the given theory term and return its string representation.
     """
     ctl = Control(lib, [])
-    ctl.parse_string(
-        f"""
+    ctl.parse_string(f"""
 #theory test {{
     t {{
     +  : 3, unary;
@@ -42,8 +41,7 @@ def eval_term_sym(s: str) -> Symbol:
     &a/0 : t, head
 }}.
 &a {{{s}}}.
-"""
-    )
+""")
     ctl.ground()
     for x in ctl.base.theory:
         return evaluate(lib, x.elements[0].tuple[0])
@@ -143,7 +141,8 @@ class TestInvertSymbol(TestCase):
 
     def test_positive_function(self):
         self.assertEqual(
-            invert_symbol(lib, Function(lib, "a", [], True)), Function(lib, "a", [], False)
+            invert_symbol(lib, Function(lib, "a", [], True)),
+            Function(lib, "a", [], False),
         )
         self.assertEqual(
             invert_symbol(lib, Function(lib, "f", [Number(lib, 1)], True)),
@@ -152,12 +151,15 @@ class TestInvertSymbol(TestCase):
 
     def test_negative_function(self):
         self.assertEqual(
-            invert_symbol(lib, Function(lib, "a", [], False)), Function(lib, "a", [], True)
+            invert_symbol(lib, Function(lib, "a", [], False)),
+            Function(lib, "a", [], True),
         )
 
     def test_error(self):
         self.assertRaises(TypeError, invert_symbol, lib, String(lib, "hello"))
-        self.assertRaises(TypeError, invert_symbol, lib, Tuple_(lib, [Number(lib, 1), Number(lib, 2)]))
+        self.assertRaises(
+            TypeError, invert_symbol, lib, Tuple_(lib, [Number(lib, 1), Number(lib, 2)])
+        )
         self.assertRaises(TypeError, invert_symbol, lib, Function(lib, "", [], True))
 
 

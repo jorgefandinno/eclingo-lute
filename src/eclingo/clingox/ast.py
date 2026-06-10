@@ -105,7 +105,6 @@ Another interesting feature is to convert ASTs to YAML:
 ```
 '''
 
-from copy import copy
 from enum import Enum, auto
 from functools import lru_cache, partial, singledispatch
 from re import fullmatch
@@ -125,21 +124,151 @@ from typing import (
 )
 
 import clingo
-from clingo.core import Location, Position
 from clingo import ast
-from clingo.ast import (
-    Function,
-    Sign,
-    StrSequence,
-    SymbolicAtom,
-    SymbolicTerm,
-    TheoryAtomType,
-    TheoryFunction,
-    TheoryOperatorType,
-    Transformer,
-    UnaryOperation,
-    parse_string,
-)
+from clingo.ast import Sign, TheoryAtomType, TheoryOperatorType, parse_string, Relation
+from clingo.core import Library, Location, Position
+from clingo.symbol import Symbol, parse_term as parse_symbol
+
+_DEFAULT_LIB = Library()
+
+if not hasattr(Sign, "Negation"):
+    Sign.Negation = Sign.Single
+    Sign.DoubleNegation = Sign.Double
+
+
+def _get_lib(lib: Optional[Library] = None) -> Library:
+    return _DEFAULT_LIB if lib is None else lib
+
+
+def Function(
+    location: Location,
+    name: str,
+    arguments: Sequence["AST"],
+    external: bool = False,
+    lib: Optional[Library] = None,
+):
+    lib = _get_lib(lib)
+    return ast.TermFunction(lib, location, name, [ast.ArgumentTuple(lib, list(arguments))], external)
+
+
+def SymbolicTerm(
+    location: Location, symbol: Symbol, lib: Optional[Library] = None
+):
+    return ast.TermSymbolic(_get_lib(lib), location, symbol)
+
+
+def Variable(location: Location, name: str, lib: Optional[Library] = None):
+    return ast.TermVariable(_get_lib(lib), location, name)
+
+
+def UnaryOperation(
+    location: Location,
+    operator_type: ast.UnaryOperator,
+    argument: "AST",
+    lib: Optional[Library] = None,
+):
+    return ast.TermUnaryOperation(_get_lib(lib), location, operator_type, argument)
+
+
+def BinaryOperation(
+    location: Location,
+    operator_type: ast.BinaryOperator,
+    left: "AST",
+    right: "AST",
+    lib: Optional[Library] = None,
+):
+    return ast.TermBinaryOperation(_get_lib(lib), location, left, operator_type, right)
+
+
+def TheoryFunction(
+    location: Location, name: str, arguments: Sequence["AST"], lib: Optional[Library] = None
+):
+    return ast.TheoryTermFunction(_get_lib(lib), location, name, list(arguments))
+
+
+ASTSequence = list
+StrSequence = list
+
+
+class ASTType(Enum):
+    Program = "Program"
+    Rule = "Rule"
+    Literal = "Literal"
+    SymbolicAtom = "SymbolicAtom"
+    SymbolicTerm = "SymbolicTerm"
+    Variable = "Variable"
+    Function = "Function"
+    UnaryOperation = "UnaryOperation"
+    BinaryOperation = "BinaryOperation"
+    Aggregate = "Aggregate"
+    BodyAggregate = "BodyAggregate"
+    TheoryAtom = "TheoryAtom"
+    ConditionalLiteral = "ConditionalLiteral"
+    TheoryDefinition = "TheoryDefinition"
+    TheoryFunction = "TheoryFunction"
+    TheorySequence = "TheorySequence"
+    TheoryUnparsedTerm = "TheoryUnparsedTerm"
+
+    def __str__(self) -> str:
+        return f"ASTType.{self.name}"
+
+
+class Transformer:
+    def __init__(self, lib: Optional[Library] = None):
+        self._lib = _get_lib(lib)
+
+    def __call__(self, x):
+        lib = getattr(self, "_lib", _DEFAULT_LIB)
+        handler = getattr(self, f"visit_{type(x).__name__}", None)
+        if handler is None and hasattr(x, "ast_type"):
+            handler = getattr(self, f"visit_{x.ast_type.name}", None)
+        if handler is not None:
+            return handler(x)
+        transformed = x.transform(lib, self)
+        return x if transformed is None else transformed
+
+    def visit(self, x):
+        return self(x)
+
+    def visit_sequence(self, xs):
+        ret = []
+        changed = False
+        for x in xs:
+            new_x = self(x)
+            changed = changed or new_x is not x
+            ret.append(new_x)
+        return ret if changed else xs
+
+
+def _set_ast_type(cls, ast_type: ASTType) -> None:
+    cls.ast_type = property(lambda self, _ast_type=ast_type: _ast_type)
+
+
+for _cls, _ast_type in (
+    (ast.StatementProgram, ASTType.Program),
+    (ast.StatementRule, ASTType.Rule),
+    (ast.StatementTheory, ASTType.TheoryDefinition),
+    (ast.HeadSimpleLiteral, ASTType.Literal),
+    (ast.BodySimpleLiteral, ASTType.Literal),
+    (ast.LiteralSymbolic, ASTType.Literal),
+    (ast.LiteralBoolean, ASTType.Literal),
+    (ast.LiteralComparison, ASTType.Literal),
+    (ast.TermFunction, ASTType.Function),
+    (ast.TermSymbolic, ASTType.SymbolicTerm),
+    (ast.TermVariable, ASTType.Variable),
+    (ast.TermUnaryOperation, ASTType.UnaryOperation),
+    (ast.TermBinaryOperation, ASTType.BinaryOperation),
+    (ast.BodyAggregate, ASTType.BodyAggregate),
+    (ast.BodyTheoryAtom, ASTType.TheoryAtom),
+    (ast.HeadTheoryAtom, ASTType.TheoryAtom),
+    (ast.BodyConditionalLiteral, ASTType.ConditionalLiteral),
+    (ast.TheoryTermFunction, ASTType.TheoryFunction),
+    (ast.TheoryTermTuple, ASTType.TheorySequence),
+    (ast.TheoryTermUnparsed, ASTType.TheoryUnparsedTerm),
+    (ast.TheoryTermSymbolic, ASTType.SymbolicTerm),
+    (ast.TheoryTermVariable, ASTType.Variable),
+):
+    _set_ast_type(_cls, _ast_type)
 
 AST = (
     ast.Statement
@@ -256,7 +385,7 @@ def location_to_str(loc: Location) -> str:
     The string representation of the given location.
     """
     begin, end = loc.begin, loc.end
-    bf, ef = _quote(begin.filename), _quote(end.filename)
+    bf, ef = _quote(begin.file), _quote(end.file)
     ret = f"{bf}:{begin.line}:{begin.column}"
     dash, eq = True, bf == ef
     if not eq:
@@ -299,8 +428,12 @@ def str_to_location(loc: str) -> Location:
         raise RuntimeError("could not parse location")
     begin = Position(_unquote(m["bf"]), int(m["bl"]), int(m["bc"]))
     end = Position(
-        _unquote(_s(m, "bf", "ef")), int(_s(m, "bl", "el")), int(_s(m, "bc", "ec"))
+        _DEFAULT_LIB,
+        _unquote(_s(m, "bf", "ef")),
+        int(_s(m, "bl", "el")),
+        int(_s(m, "bc", "ec")),
     )
+    begin = Position(_DEFAULT_LIB, _unquote(m["bf"]), int(m["bl"]), int(m["bc"]))
     return Location(begin, end)
 
 
@@ -913,7 +1046,8 @@ def rename_symbolic_atoms(x: AST, rename_function: Callable[[str], str]) -> AST:
             sym = term.symbol
             new_name = rename_function(sym.name)
             return SymbolicTerm(
-                term.location, clingo.Function(new_name, sym.arguments, sym.positive)
+                term.location,
+                clingo.symbol.Function(_get_lib(), new_name, sym.arguments, sym.positive),
             )
         if term.ast_type == ASTType.Function:
             return Function(
@@ -1000,14 +1134,37 @@ def _encode_str(x: str) -> str:
     return x
 
 
-@_encode.register(clingo.Symbol)
-def _encode_symbol(x: clingo.Symbol) -> str:
+@_encode.register(Symbol)
+def _encode_symbol(x: Symbol) -> str:
     return str(x)
 
 
 @_encode.register(int)
 def _encode_int(x: int) -> int:
     return x
+
+SIGN_STRINGS = {
+    Sign.NoSign: "Sign.NoSign",
+    Sign.Negation: "Sign.Negation",
+    Sign.DoubleNegation: "Sign.DoubleNegation",
+}
+
+@_encode.register(Sign)
+def _encode_sign(x: Sign) -> str:
+    return SIGN_STRINGS[x]
+
+RELATION_STRINGS = {
+    Relation.Equal: "Relation.Equal",
+    Relation.NotEqual: "Relation.NotEqual",
+    Relation.Less: "Relation.Less",
+    Relation.LessEqual: "Relation.LessEqual",
+    Relation.Greater: "Relation.Greater",
+    Relation.GreaterEqual: "Relation.GreaterEqual",
+}
+
+@_encode.register(Relation)
+def _encode_relation(x: Relation) -> str:
+    return RELATION_STRINGS[x]
 
 
 @_encode.register(ASTSequence)
@@ -1051,10 +1208,12 @@ def ast_to_dict(x: AST) -> dict:
     --------
     dict_to_ast
     """
-    ret = {"ast_type": str(x.ast_type).replace("ASTType.", "")}
-    for key, val in x.items():
+    ret = {"ast_type": type(x).__name__}
+    for key in dir(x):
+        if key == "ast_type" or key.startswith("_") or callable((val :=getattr(x, key))):
+            continue
         if key == "location":
-            assert isinstance(val, Location)
+            assert isinstance(val, Location), f"expected location to be of type Location, got {type(val)} in {x} of type {type(x)}"
             enc = location_to_str(val)
         else:
             enc = _encode(val)
@@ -1073,7 +1232,7 @@ def _decode_str(x: str, key: str) -> Any:
         return str_to_location(x)
 
     if key == "symbol":
-        return clingo.parse_term(x)
+        return parse_symbol(_get_lib(), x)
 
     assert key in ("name", "id", "code", "elements", "term", "list", "operator_name")
     return x
@@ -1265,7 +1424,7 @@ def partition_body_literals(
 _unary_operator_map = {
     "-": ast.UnaryOperator.Minus,
     "~": ast.UnaryOperator.Negation,
-    "|": ast.UnaryOperator.Absolute,
+    "|": "absolute",
 }
 
 _binary_operator_map = {
@@ -1277,7 +1436,7 @@ _binary_operator_map = {
     "**": ast.BinaryOperator.Power,
     "&": ast.BinaryOperator.And,
     "?": ast.BinaryOperator.Or,
-    "^": ast.BinaryOperator.XOr,
+    "^": ast.BinaryOperator.Xor,
 }
 
 
@@ -1292,8 +1451,9 @@ def _theory_term_to_term(x: AST) -> AST:
         if len(x.arguments) == 1 and x.name in _unary_operator_map:
             arg = _theory_term_to_term(x.arguments[0])
             uop = _unary_operator_map[x.name]
-
-            return ast.UnaryOperation(x.location, uop, arg)
+            if uop == "absolute":
+                return ast.TermAbsolute(_get_lib(), x.location, [arg])
+            return UnaryOperation(x.location, uop, arg)
 
         if len(x.arguments) == 2:
             lhs = _theory_term_to_term(x.arguments[0])
@@ -1301,24 +1461,19 @@ def _theory_term_to_term(x: AST) -> AST:
 
             if x.name in _binary_operator_map:
                 bop = _binary_operator_map[x.name]
-                return ast.BinaryOperation(x.location, bop, lhs, rhs)
+                return BinaryOperation(x.location, bop, lhs, rhs)
 
             if x.name == "..":
-                return ast.Interval(x.location, lhs, rhs)
+                return ast.TermBinaryOperation(
+                    _get_lib(), x.location, lhs, ast.BinaryOperator.Power + 2, rhs
+                )
 
         if not is_operator(x.name):
-            return ast.Function(
-                x.location,
-                x.name,
-                [_theory_term_to_term(a) for a in x.arguments],
-                False,
-            )
+            return Function(x.location, x.name, [_theory_term_to_term(a) for a in x.arguments])
 
     elif x.ast_type == ASTType.TheorySequence:
-        if x.sequence_type == ast.TheorySequenceType.Tuple:
-            return ast.Function(
-                x.location, "", [_theory_term_to_term(a) for a in x.terms], False
-            )
+        if x.tuple_type == ast.TheoryTupleType.Tuple:
+            return Function(x.location, "", [_theory_term_to_term(a) for a in x.terms])
 
     raise RuntimeError(f"{location_to_str(x.location)}: invalid term `{x}`")
 
@@ -1336,8 +1491,8 @@ def theory_term_to_term(x: AST, parse: bool = True) -> AST:
 
 
 def _build_atom(
-    location: ast.Location, positive: bool, name: str, arguments: List
-) -> ast.AST:
+    location: Location, positive: bool, name: str, arguments: List
+) -> AST:
     """
     Helper function to create an atom.
 
@@ -1347,23 +1502,23 @@ def _build_atom(
     name      -- The name of the atom.
     arguments -- The arguments of the atom.
     """
-    ret = ast.Function(location, name, arguments, False)
+    ret = Function(location, name, arguments)
     if not positive:
-        ret = ast.UnaryOperation(location, ast.UnaryOperator.Minus, ret)
-    return ast.SymbolicAtom(ret)
+        ret = UnaryOperation(location, ast.UnaryOperator.Minus, ret)
+    return ret
 
 
-def negate_sign(sign: ast.Sign) -> ast.Sign:
+def negate_sign(sign: Sign) -> Sign:
     """
     Negate the given sign.
     """
-    if sign == ast.Sign.Negation:
-        return ast.Sign.DoubleNegation
-    return ast.Sign.Negation
+    if sign == Sign.Negation:
+        return Sign.DoubleNegation
+    return Sign.Negation
 
 
 def _theory_term_to_literal(
-    x: AST, positive: bool = True, sign: ast.Sign = ast.Sign.NoSign
+    x: AST, positive: bool = True, sign: Sign = Sign.NoSign
 ) -> AST:
     """
     Convert a given theory term into a symbolic clingo literal.
@@ -1385,7 +1540,7 @@ def _theory_term_to_literal(
                 x.name,
                 [theory_term_to_term(a) for a in x.arguments],
             )
-            return ast.Literal(x.location, sign, atom)
+            return ast.LiteralSymbolic(_get_lib(), x.location, sign, atom)
 
     elif (
         x.ast_type == ASTType.SymbolicTerm
@@ -1396,9 +1551,9 @@ def _theory_term_to_literal(
             x.location,
             (positive == x.symbol.positive),
             x.symbol.name,
-            [ast.SymbolicTerm(x.location, a) for a in x.symbol.arguments],
+            [SymbolicTerm(x.location, a) for a in x.symbol.arguments],
         )
-        return ast.Literal(x.location, sign, atom)
+        return ast.LiteralSymbolic(_get_lib(), x.location, sign, atom)
 
     raise RuntimeError(f"{location_to_str(x.location)}: invalid literal `{x}`")
 
@@ -1419,7 +1574,7 @@ def theory_term_to_literal(x: AST, parse: bool = True) -> AST:
     """
     if parse:
         x = clingo_literal_parser()(x)
-    return _theory_term_to_literal(x, True, ast.Sign.NoSign)
+    return _theory_term_to_literal(x, True, Sign.NoSign)
 
 
 def normalize_symbolic_terms(x: AST):
@@ -1439,7 +1594,7 @@ def normalize_symbolic_terms(x: AST):
     return _NormalizeSymbolicTermTransformer().visit(x)
 
 
-def _symbol_to_ast(x: clingo.Symbol, location: ast.Location) -> AST:
+def _symbol_to_ast(x: Symbol, location: Location) -> AST:
     """
     Convert the given symbol into an AST.
 
@@ -1456,12 +1611,7 @@ def _symbol_to_ast(x: clingo.Symbol, location: ast.Location) -> AST:
     """
     if x.type != clingo.SymbolType.Function:
         return SymbolicTerm(location, x)
-    return ast.Function(
-        location,
-        x.name,
-        [_symbol_to_ast(a, location) for a in x.arguments],
-        external=False,
-    )
+    return Function(location, x.name, [_symbol_to_ast(a, location) for a in x.arguments])
 
 
 class _NormalizeSymbolicTermTransformer(Transformer):
