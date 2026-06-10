@@ -279,6 +279,7 @@ AST = (
     | ast.BodyAggregateElement
     | ast.Edge
     | ast.HeadAggregateElement
+    | ast.HeadConditionalLiteral
     | ast.HeadLiteral
     | ast.LeftGuard
     | ast.OptimizeElement
