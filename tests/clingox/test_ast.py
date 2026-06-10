@@ -10,7 +10,7 @@ from unittest import TestCase
 import clingo
 from clingo.symbol import Function, Number
 from clingo.core import Library, Location, Position
-from clingo.ast import AggregateFunction, Sign
+from clingo.ast import AggregateFunction, Sign, Relation
 
 from eclingo.clingox.testing.ast import parse_term
 
@@ -1155,7 +1155,7 @@ class TestAST(TestCase):
                             "right": [
                                 {
                                     "ast_type": "RightGuard",
-                                    "relation": "Relation.LessEqual",
+                                    "relation": Relation.LessEqual,
                                     "term": {
                                         "ast_type": "TermSymbolic",
                                         "location": "<string>:1:6-8",
@@ -1189,7 +1189,7 @@ class TestAST(TestCase):
                             "right": [
                                 {
                                     "ast_type": "RightGuard",
-                                    "relation": "Relation.Less",
+                                    "relation": Relation.Less,
                                     "term": {
                                         "ast_type": "TermSymbolic",
                                         "location": "<string>:1:5-7",
@@ -1223,7 +1223,7 @@ class TestAST(TestCase):
                             "right": [
                                 {
                                     "ast_type": "RightGuard",
-                                    "relation": "Relation.GreaterEqual",
+                                    "relation": Relation.GreaterEqual,
                                     "term": {
                                         "ast_type": "TermSymbolic",
                                         "location": "<string>:1:6-8",
@@ -1258,7 +1258,7 @@ class TestAST(TestCase):
                             "right": [
                                 {
                                     "ast_type": "RightGuard",
-                                    "relation": "Relation.Greater",
+                                    "relation": Relation.Greater,
                                     "term": {
                                         "ast_type": "TermSymbolic",
                                         "location": "<string>:1:5-7",
@@ -1292,7 +1292,7 @@ class TestAST(TestCase):
                             "right": [
                                 {
                                     "ast_type": "RightGuard",
-                                    "relation": "Relation.Equal",
+                                    "relation": Relation.Equal,
                                     "term": {
                                         "ast_type": "TermSymbolic",
                                         "location": "<string>:1:5-7",
@@ -1326,7 +1326,7 @@ class TestAST(TestCase):
                             "right": [
                                 {
                                     "ast_type": "RightGuard",
-                                    "relation": "Relation.NotEqual",
+                                    "relation": Relation.NotEqual,
                                     "term": {
                                         "ast_type": "TermSymbolic",
                                         "location": "<string>:1:6-8",
@@ -1477,7 +1477,7 @@ class TestAST(TestCase):
                         "location": "<string>:1:1-18",
                         "right": {
                             "ast_type": "RightGuard",
-                            "relation": "Relation.LessEqual",
+                            "relation": Relation.LessEqual,
                             "term": {
                                 "ast_type": "TermSymbolic",
                                 "location": "<string>:1:17-18",
@@ -1527,7 +1527,7 @@ class TestAST(TestCase):
                             "location": "<string>:1:4-19",
                             "right": {
                                 "ast_type": "RightGuard",
-                                "relation": "Relation.LessEqual",
+                                "relation": Relation.LessEqual,
                                 "term": {
                                     "ast_type": "TermSymbolic",
                                     "location": "<string>:1:18-19",
