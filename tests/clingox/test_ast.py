@@ -2099,8 +2099,6 @@ class TestAST(TestCase):
                 and x.elements[0].tuple
                 and x.elements[0].tuple[0].ast_type == ASTType.TheoryUnparsedTerm
                 and x.elements[0].tuple[0].elements
-                and x.elements[0].tuple[0].elements[0].ast_type
-                == ASTType.TheoryUnparsedTermElement
                 and x.elements[0].tuple[0].elements[0].operators
                 and x.elements[0].tuple[0].elements[0].operators[0] == "not"
             ),

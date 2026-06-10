@@ -1302,16 +1302,32 @@ def _body_literal_predicate(
     conditional_literal_predicate: ASTPredicate = True,
     signs: Container[Sign] = (Sign.NoSign, Sign.Negation, Sign.DoubleNegation),
 ) -> bool:
+    if not hasattr(lit, "ast_type"):
+        # clingo6: BodySetAggregate has no ast_type
+        if hasattr(lit, "sign") and lit.sign not in signs:
+            return False
+        return _eval_predicate(aggregate_predicate, lit)
     if lit.ast_type == ASTType.Literal:
-        atom = lit.atom
+        # clingo6: BodySimpleLiteral wraps a LiteralSymbolic via .literal
+        inner = lit.literal
+        if inner.sign not in signs:
+            return False
+        atom = inner.atom
+        if atom.ast_type == ASTType.SymbolicAtom:
+            # clingo5: SymbolicAtom wrapper around the actual symbol
+            return _eval_predicate(symbolic_atom_predicate, atom.symbol)
+        # clingo6: atom is directly TermFunction / TermSymbolic / etc.
+        return _eval_predicate(symbolic_atom_predicate, atom)
+    elif lit.ast_type == ASTType.BodyAggregate:
+        # clingo6: top-level body item
         if lit.sign not in signs:
             return False
-        if atom.ast_type == ASTType.SymbolicAtom:
-            return _eval_predicate(symbolic_atom_predicate, atom.symbol)
-        if atom.ast_type in (ASTType.Aggregate, ASTType.BodyAggregate):
-            return _eval_predicate(aggregate_predicate, atom)
-        if atom.ast_type == ASTType.TheoryAtom:
-            return _eval_predicate(theory_atom_predicate, atom)
+        return _eval_predicate(aggregate_predicate, lit)
+    elif lit.ast_type == ASTType.TheoryAtom:
+        # clingo6: top-level body item
+        if lit.sign not in signs:
+            return False
+        return _eval_predicate(theory_atom_predicate, lit)
     elif lit.ast_type == ASTType.ConditionalLiteral:
         return lit.literal.sign in signs and _eval_predicate(
             conditional_literal_predicate, lit
