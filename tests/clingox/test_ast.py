@@ -10,7 +10,7 @@ from unittest import TestCase
 import clingo
 from clingo.symbol import Function, Number
 from clingo.core import Library, Location, Position
-from clingo.ast import AggregateFunction, Sign, Relation, OptimizeType, UnaryOperator, BinaryOperator
+from clingo.ast import AggregateFunction, Sign, Relation, OptimizeType, UnaryOperator, BinaryOperator, TheoryOperatorType, TheoryAtomType
 
 from eclingo.clingox.testing.ast import parse_term
 
@@ -1182,11 +1182,22 @@ class TestAST(TestCase):
         Tests for converting between python and ast representation of theory
         releated constructs.
         """
+        self.maxDiff = None
+
+        def p_func(loc):
+            return {
+                "ast_type": "TermFunction",
+                "external": False,
+                "location": loc,
+                "name": "p",
+                "pool": [{"ast_type": "ArgumentTuple", "arguments": []}],
+            }
+
         self.assertEqual(
             test_ast_dict(self, "#theory t { }."),
             [
                 {
-                    "ast_type": "TheoryDefinition",
+                    "ast_type": "StatementTheory",
                     "location": "<string>:1:1-15",
                     "name": "t",
                     "terms": [],
@@ -1198,7 +1209,7 @@ class TestAST(TestCase):
             test_ast_dict(self, "#theory t { t { + : 1, unary } }."),
             [
                 {
-                    "ast_type": "TheoryDefinition",
+                    "ast_type": "StatementTheory",
                     "location": "<string>:1:1-34",
                     "name": "t",
                     "terms": [
@@ -1212,7 +1223,7 @@ class TestAST(TestCase):
                                     "location": "<string>:1:17-29",
                                     "name": "+",
                                     "priority": 1,
-                                    "operator_type": 0,
+                                    "operator_type": TheoryOperatorType.Unary,
                                 }
                             ],
                         }
@@ -1225,7 +1236,7 @@ class TestAST(TestCase):
             test_ast_dict(self, "#theory t { t { + : 1, binary, left } }."),
             [
                 {
-                    "ast_type": "TheoryDefinition",
+                    "ast_type": "StatementTheory",
                     "location": "<string>:1:1-41",
                     "name": "t",
                     "terms": [
@@ -1239,7 +1250,7 @@ class TestAST(TestCase):
                                     "location": "<string>:1:17-36",
                                     "name": "+",
                                     "priority": 1,
-                                    "operator_type": 1,
+                                    "operator_type": TheoryOperatorType.BinaryLeft,
                                 }
                             ],
                         }
@@ -1252,7 +1263,7 @@ class TestAST(TestCase):
             test_ast_dict(self, "#theory t { t { + : 1, binary, right } }."),
             [
                 {
-                    "ast_type": "TheoryDefinition",
+                    "ast_type": "StatementTheory",
                     "location": "<string>:1:1-42",
                     "name": "t",
                     "terms": [
@@ -1266,7 +1277,7 @@ class TestAST(TestCase):
                                     "location": "<string>:1:17-37",
                                     "name": "+",
                                     "priority": 1,
-                                    "operator_type": 2,
+                                    "operator_type": TheoryOperatorType.BinaryRight,
                                 }
                             ],
                         }
@@ -1279,7 +1290,7 @@ class TestAST(TestCase):
             test_ast_dict(self, "#theory t { &p/0 : t, any }."),
             [
                 {
-                    "ast_type": "TheoryDefinition",
+                    "ast_type": "StatementTheory",
                     "location": "<string>:1:1-29",
                     "name": "t",
                     "terms": [],
@@ -1287,7 +1298,7 @@ class TestAST(TestCase):
                         {
                             "ast_type": "TheoryAtomDefinition",
                             "location": "<string>:1:13-26",
-                            "atom_type": 2,
+                            "atom_type": TheoryAtomType.Any,
                             "name": "p",
                             "arity": 0,
                             "term": "t",
@@ -1301,7 +1312,7 @@ class TestAST(TestCase):
             test_ast_dict(self, "#theory t { &p/0 : t, head }."),
             [
                 {
-                    "ast_type": "TheoryDefinition",
+                    "ast_type": "StatementTheory",
                     "location": "<string>:1:1-30",
                     "name": "t",
                     "terms": [],
@@ -1309,7 +1320,7 @@ class TestAST(TestCase):
                         {
                             "ast_type": "TheoryAtomDefinition",
                             "location": "<string>:1:13-27",
-                            "atom_type": 0,
+                            "atom_type": TheoryAtomType.Head,
                             "name": "p",
                             "arity": 0,
                             "term": "t",
@@ -1323,7 +1334,7 @@ class TestAST(TestCase):
             test_ast_dict(self, "#theory t { &p/1 : t, body }."),
             [
                 {
-                    "ast_type": "TheoryDefinition",
+                    "ast_type": "StatementTheory",
                     "location": "<string>:1:1-30",
                     "name": "t",
                     "terms": [],
@@ -1331,7 +1342,7 @@ class TestAST(TestCase):
                         {
                             "ast_type": "TheoryAtomDefinition",
                             "location": "<string>:1:13-27",
-                            "atom_type": 1,
+                            "atom_type": TheoryAtomType.Body,
                             "name": "p",
                             "arity": 1,
                             "term": "t",
@@ -1345,7 +1356,7 @@ class TestAST(TestCase):
             test_ast_dict(self, "#theory t { &p/2 : t, { < }, t, directive }."),
             [
                 {
-                    "ast_type": "TheoryDefinition",
+                    "ast_type": "StatementTheory",
                     "location": "<string>:1:1-45",
                     "name": "t",
                     "terms": [],
@@ -1353,7 +1364,7 @@ class TestAST(TestCase):
                         {
                             "ast_type": "TheoryAtomDefinition",
                             "location": "<string>:1:13-42",
-                            "atom_type": 3,
+                            "atom_type": TheoryAtomType.Directive,
                             "name": "p",
                             "arity": 2,
                             "term": "t",
@@ -1371,20 +1382,14 @@ class TestAST(TestCase):
             test_ast_dict(self, "&p { }."),
             [
                 {
-                    "ast_type": "Rule",
+                    "ast_type": "StatementRule",
                     "location": "<string>:1:1-8",
                     "head": {
-                        "ast_type": "TheoryAtom",
-                        "location": "<string>:1:2-3",
-                        "term": {
-                            "ast_type": "Function",
-                            "location": "<string>:1:2-3",
-                            "name": "p",
-                            "arguments": [],
-                            "external": 0,
-                        },
+                        "ast_type": "HeadTheoryAtom",
+                        "location": "<string>:1:1-7",
+                        "name": p_func("<string>:1:2-3"),
                         "elements": [],
-                        "guard": None,
+                        "right": None,
                     },
                     "body": [],
                 }
@@ -1394,32 +1399,25 @@ class TestAST(TestCase):
             test_ast_dict(self, ":- &p { }."),
             [
                 {
-                    "ast_type": "Rule",
+                    "ast_type": "StatementRule",
                     "location": "<string>:1:1-11",
                     "head": {
-                        "ast_type": "Literal",
-                        "location": "<string>:1:1-11",
-                        "sign": 0,
-                        "atom": {"ast_type": "BooleanConstant", "value": 0},
+                        "ast_type": "HeadSimpleLiteral",
+                        "literal": {
+                            "ast_type": "LiteralBoolean",
+                            "location": "<string>:1:11-12",
+                            "sign": Sign.NoSign,
+                            "value": False,
+                        },
                     },
                     "body": [
                         {
-                            "ast_type": "Literal",
+                            "ast_type": "BodyTheoryAtom",
                             "location": "<string>:1:4-10",
-                            "sign": 0,
-                            "atom": {
-                                "ast_type": "TheoryAtom",
-                                "location": "<string>:1:5-6",
-                                "term": {
-                                    "ast_type": "Function",
-                                    "location": "<string>:1:5-6",
-                                    "name": "p",
-                                    "arguments": [],
-                                    "external": 0,
-                                },
-                                "elements": [],
-                                "guard": None,
-                            },
+                            "sign": Sign.NoSign,
+                            "name": p_func("<string>:1:5-6"),
+                            "elements": [],
+                            "right": None,
                         }
                     ],
                 }
@@ -1429,26 +1427,30 @@ class TestAST(TestCase):
             test_ast_dict(self, "&p { } > 2."),
             [
                 {
-                    "ast_type": "Rule",
+                    "ast_type": "StatementRule",
                     "location": "<string>:1:1-12",
                     "head": {
-                        "ast_type": "TheoryAtom",
-                        "location": "<string>:1:2-3",
-                        "term": {
-                            "ast_type": "Function",
-                            "location": "<string>:1:2-3",
-                            "name": "p",
-                            "arguments": [],
-                            "external": 0,
-                        },
+                        "ast_type": "HeadTheoryAtom",
+                        "location": "<string>:1:1-12",
+                        "name": p_func("<string>:1:2-3"),
                         "elements": [],
-                        "guard": {
-                            "ast_type": "TheoryGuard",
-                            "operator_name": ">",
+                        "right": {
+                            "ast_type": "TheoryRightGuard",
+                            "theory_operator": ">",
                             "term": {
-                                "ast_type": "SymbolicTerm",
-                                "location": "<string>:1:10-11",
-                                "symbol": "2",
+                                "ast_type": "TheoryTermUnparsed",
+                                "location": "<string>:1:10-12",
+                                "elements": [
+                                    {
+                                        "ast_type": "UnparsedElement",
+                                        "operators": [],
+                                        "term": {
+                                            "ast_type": "TheoryTermSymbolic",
+                                            "location": "<string>:1:10-11",
+                                            "symbol": "2",
+                                        },
+                                    }
+                                ],
                             },
                         },
                     },
@@ -1460,53 +1462,63 @@ class TestAST(TestCase):
             test_ast_dict(self, "&p { a,b: q }."),
             [
                 {
-                    "ast_type": "Rule",
+                    "ast_type": "StatementRule",
                     "location": "<string>:1:1-15",
                     "head": {
-                        "ast_type": "TheoryAtom",
-                        "location": "<string>:1:2-3",
-                        "term": {
-                            "ast_type": "Function",
-                            "location": "<string>:1:2-3",
-                            "name": "p",
-                            "arguments": [],
-                            "external": 0,
-                        },
+                        "ast_type": "HeadTheoryAtom",
+                        "location": "<string>:1:1-14",
+                        "name": p_func("<string>:1:2-3"),
                         "elements": [
                             {
                                 "ast_type": "TheoryAtomElement",
-                                "terms": [
+                                "location": "<string>:1:6-14",
+                                "tuple": [
                                     {
-                                        "ast_type": "SymbolicTerm",
-                                        "location": "<string>:1:6-7",
-                                        "symbol": "a",
+                                        "ast_type": "TheoryTermUnparsed",
+                                        "location": "<string>:1:6-8",
+                                        "elements": [
+                                            {
+                                                "ast_type": "UnparsedElement",
+                                                "operators": [],
+                                                "term": {
+                                                    "ast_type": "TheoryTermSymbolic",
+                                                    "location": "<string>:1:6-7",
+                                                    "symbol": "a",
+                                                },
+                                            }
+                                        ],
                                     },
                                     {
-                                        "ast_type": "SymbolicTerm",
-                                        "location": "<string>:1:8-9",
-                                        "symbol": "b",
+                                        "ast_type": "TheoryTermUnparsed",
+                                        "location": "<string>:1:8-10",
+                                        "elements": [
+                                            {
+                                                "ast_type": "UnparsedElement",
+                                                "operators": [],
+                                                "term": {
+                                                    "ast_type": "TheoryTermSymbolic",
+                                                    "location": "<string>:1:8-9",
+                                                    "symbol": "b",
+                                                },
+                                            }
+                                        ],
                                     },
                                 ],
                                 "condition": [
                                     {
-                                        "ast_type": "Literal",
-                                        "location": "<string>:1:11-12",
-                                        "sign": 0,
+                                        "ast_type": "LiteralSymbolic",
+                                        "location": "<string>:1:11-14",
+                                        "sign": Sign.NoSign,
                                         "atom": {
-                                            "ast_type": "SymbolicAtom",
-                                            "symbol": {
-                                                "ast_type": "Function",
-                                                "location": "<string>:1:11-12",
-                                                "name": "q",
-                                                "arguments": [],
-                                                "external": 0,
-                                            },
+                                            "ast_type": "TermSymbolic",
+                                            "location": "<string>:1:11-14",
+                                            "symbol": "q",
                                         },
                                     }
                                 ],
                             }
                         ],
-                        "guard": None,
+                        "right": None,
                     },
                     "body": [],
                 }

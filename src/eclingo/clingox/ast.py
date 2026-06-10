@@ -1610,7 +1610,7 @@ def _symbol_to_ast(x: Symbol, location: Location) -> AST:
     -------
     The converted AST.
     """
-    if x.type != clingo.SymbolType.Function:
+    if x.type != clingo.symbol.SymbolType.Function:
         return SymbolicTerm(location, x)
     return Function(location, x.name, [_symbol_to_ast(a, location) for a in x.arguments])
 
@@ -1634,7 +1634,7 @@ class _NormalizeSymbolicTermTransformer(Transformer):
 
         symbol = x.symbol
 
-        if symbol.type != clingo.SymbolType.Function:
+        if symbol.type != clingo.symbol.SymbolType.Function:
             return x
 
         return _symbol_to_ast(symbol, x.location)
