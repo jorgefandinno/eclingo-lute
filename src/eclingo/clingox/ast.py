@@ -125,7 +125,17 @@ from typing import (
 
 import clingo
 from clingo import ast
-from clingo.ast import Sign, TheoryAtomType, TheoryOperatorType, parse_string, Relation
+from clingo.ast import (
+    LiteralSymbolic,
+    Relation,
+    Sign,
+    TermSymbolic,
+    TermUnaryOperation,
+    TheoryAtomType,
+    TheoryOperatorType,
+    UnaryOperator,
+    parse_string,
+)
 from clingo.core import Library, Location, Position
 from clingo.symbol import Symbol, parse_term as parse_symbol
 
@@ -427,7 +437,6 @@ def str_to_location(loc: str) -> Location:
     )
     if not m:
         raise RuntimeError("could not parse location")
-    begin = Position(_unquote(m["bf"]), int(m["bl"]), int(m["bc"]))
     end = Position(
         _DEFAULT_LIB,
         _unquote(_s(m, "bf", "ef")),
@@ -610,7 +619,9 @@ class TheoryTermParser(Transformer):
         if arity is not None and is_operator(x.name):
             self._parser.check_operator(x.name, arity, x.location)
 
-        return x.update(**self.visit_children(x))
+        lib = getattr(self, "_lib", _DEFAULT_LIB)
+        transformed = x.transform(lib, self)
+        return transformed if transformed is not None else x
 
     def visit_TheoryUnparsedTerm(self, x: AST) -> AST:
         """
@@ -732,11 +743,12 @@ class TheoryParser(Transformer):
         self._is_directive = is_directive
 
     def _visit_body(self, x: AST) -> AST:
+        lib = getattr(self, "_lib", _DEFAULT_LIB)
         try:
             self._reset(False, True, False)
             old = x.body
             new = self.visit_sequence(old)
-            return x if new is old else x.update(body=new)
+            return x if new is old else x.update(lib, body=new)
         finally:
             self._reset()
 
@@ -753,20 +765,19 @@ class TheoryParser(Transformer):
         -------
         The rewritten AST.
         """
+        lib = getattr(self, "_lib", _DEFAULT_LIB)
         ret = self._visit_body(x)
         try:
             self._reset(True, False, not x.body)
             head = self(x.head)
             if head is not x.head:
-                if ret is x:
-                    ret = copy(ret)
-                ret.head = head
+                ret = ret.update(lib, head=head)
         finally:
             self._reset()
 
         return ret
 
-    def visit_ShowTerm(self, x: AST) -> AST:
+    def visit_StatementShow(self, x: AST) -> AST:
         """
         Parse theory atoms in body.
 
@@ -781,7 +792,7 @@ class TheoryParser(Transformer):
         """
         return self._visit_body(x)
 
-    def visit_Minimize(self, x: AST) -> AST:
+    def visit_StatementWeakConstraint(self, x: AST) -> AST:
         """
         Parse theory atoms in body.
 
@@ -796,7 +807,7 @@ class TheoryParser(Transformer):
         """
         return self._visit_body(x)
 
-    def visit_Edge(self, x: AST) -> AST:
+    def visit_StatementEdge(self, x: AST) -> AST:
         """
         Parse theory atoms in body.
 
@@ -811,22 +822,7 @@ class TheoryParser(Transformer):
         """
         return self._visit_body(x)
 
-    def visit_Heuristic(self, x: AST) -> AST:
-        """
-        Parse theory atoms in body.
-
-        Parameters
-        ----------
-        x
-            The AST to rewrite.
-
-        Returns
-        -------
-        The rewritten AST.
-        """
-        return self._visit_body(x)
-
-    def visit_ProjectAtom(self, x: AST) -> AST:
+    def visit_StatementHeuristic(self, x: AST) -> AST:
         """
         Parse theory atoms in body.
 
@@ -854,8 +850,9 @@ class TheoryParser(Transformer):
         -------
         The rewritten AST.
         """
-        name = x.term.name
-        arity = len(x.term.arguments)
+        lib = getattr(self, "_lib", _DEFAULT_LIB)
+        name = x.name.name
+        arity = len(x.name.pool[0].arguments) if x.name.pool else 0
         if (name, arity) not in self._table:
             raise RuntimeError(
                 f"theory atom definiton not found: {location_to_str(x.location)}"
@@ -877,26 +874,25 @@ class TheoryParser(Transformer):
                 f"theory atom must be a directive: {location_to_str(x.location)}"
             )
 
-        x = copy(x)
-        x.term = element_parser(x.term)
-        x.elements = element_parser.visit_sequence(x.elements)
+        new_name = element_parser(x.name)
+        new_elements = element_parser.visit_sequence(x.elements)
+        new_right = x.right
 
-        if x.guard is not None:
+        if x.right is not None:
             if guard_table is None:
                 raise RuntimeError(
                     f"unexpected guard in theory atom: {location_to_str(x.location)}"
                 )
 
             guards, guard_parser = guard_table
-            if x.guard.operator_name not in guards:
+            if x.right.theory_operator not in guards:
                 raise RuntimeError(
                     f"unexpected guard in theory atom: {location_to_str(x.location)}"
                 )
 
-            x.guard = copy(x.guard)
-            x.guard.term = guard_parser(x.guard.term)
+            new_right = x.right.update(lib, term=guard_parser(x.right.term))
 
-        return x
+        return x.update(lib, name=new_name, elements=new_elements, right=new_right)
 
 
 def theory_parser_from_definition(x: AST) -> TheoryParser:
@@ -966,10 +962,10 @@ def parse_theory(s: str) -> TheoryParser:
             assert (
                 stm.ast_type == ASTType.Program
                 and stm.name == "base"
-                and not stm.parameters
+                and not stm.arguments
             )
 
-    parse_string(f"{s}.", extract)
+    parse_string(_DEFAULT_LIB, f"{s}.", extract)
     if parser is None:
         raise ValueError("no theory definition found")
     return cast(TheoryParser, parser)
@@ -985,22 +981,16 @@ class _SymbolicAtomTransformer(Transformer):
     def __init__(self, transformer_function: Callable[[AST], AST]):
         self._transformer_function = transformer_function
 
-    def visit_SymbolicAtom(self, x: AST) -> AST:
+    def visit_LiteralSymbolic(self, x: AST) -> AST:
         """
-        Transform the given symbolic.
-
-        Parameters
-        ----------
-        x
-            The AST to rewrite.
-
-        Returns
-        -------
-        The rewritten AST.
+        Transform the given symbolic literal (clingo6: LiteralSymbolic replaces SymbolicAtom).
         """
-        term = x.symbol
-        new_term = self._transformer_function(term)
-        return x if new_term is term else SymbolicAtom(new_term)
+        lib = getattr(self, "_lib", _DEFAULT_LIB)
+        atom = x.atom
+        new_atom = self._transformer_function(atom)
+        if new_atom is atom:
+            return x
+        return x.update(lib, atom=new_atom)
 
 
 def rewrite_symbolic_atoms(x: AST, rewrite_function: Callable[[AST], AST]) -> AST:
@@ -1041,18 +1031,19 @@ def rename_symbolic_atoms(x: AST, rename_function: Callable[[str], str]) -> AST:
     def renamer(term: AST):
         if term.ast_type == ASTType.UnaryOperation:
             return UnaryOperation(
-                term.location, term.operator_type, renamer(term.argument)
+                term.location, term.operator_type, renamer(term.right)
             )
         if term.ast_type == ASTType.SymbolicTerm:
             sym = term.symbol
             new_name = rename_function(sym.name)
             return SymbolicTerm(
                 term.location,
-                clingo.symbol.Function(_get_lib(), new_name, sym.arguments, sym.positive),
+                clingo.symbol.Function(_get_lib(), new_name, sym.arguments, sym.is_positive),
             )
         if term.ast_type == ASTType.Function:
+            args = term.pool[0].arguments if term.pool else []
             return Function(
-                term.location, rename_function(term.name), term.arguments, term.external
+                term.location, rename_function(term.name), args, term.external
             )
         return term
 
@@ -1117,7 +1108,7 @@ def reify_symbolic_atoms(
     def reifier(term: AST):
         if term.ast_type == ASTType.UnaryOperation and not reify_strong_negation:
             return UnaryOperation(
-                term.location, term.operator_type, reifier(term.argument)
+                term.location, term.operator_type, reifier(term.right)
             )
         arguments = argument_extender(term) if argument_extender else [term]
         return Function(term.location, name, arguments, False)
@@ -1457,11 +1448,28 @@ _binary_operator_map = {
 }
 
 
+@lru_cache(maxsize=1)
+def _get_interval_template() -> AST:
+    """Get a cached TermBinaryOperation template for interval terms (operator_type=9)."""
+    stmts: List[AST] = []
+    parse_string(_DEFAULT_LIB, ":- _dummy_(1..1).", stmts.append)
+    for s in stmts:
+        if type(s).__name__ == "StatementRule":
+            return s.body[0].literal.atom.pool[0].arguments[0]
+    raise RuntimeError("Failed to create interval template")
+
+
 def _theory_term_to_term(x: AST) -> AST:
     """
     Convert a given theory term into a plain clingo term.
     """
-    if x.ast_type in (ASTType.SymbolicTerm, ASTType.Variable):
+    if x.ast_type == ASTType.SymbolicTerm:
+        if isinstance(x, ast.TheoryTermSymbolic):
+            return SymbolicTerm(x.location, x.symbol)
+        return x
+    if x.ast_type == ASTType.Variable:
+        if isinstance(x, ast.TheoryTermVariable):
+            return Variable(x.location, x.name)
         return x
 
     if x.ast_type == ASTType.TheoryFunction:
@@ -1481,16 +1489,15 @@ def _theory_term_to_term(x: AST) -> AST:
                 return BinaryOperation(x.location, bop, lhs, rhs)
 
             if x.name == "..":
-                return ast.TermBinaryOperation(
-                    _get_lib(), x.location, lhs, ast.BinaryOperator.Power + 2, rhs
-                )
+                return _get_interval_template().update(_get_lib(), left=lhs, right=rhs, location=x.location)
 
         if not is_operator(x.name):
             return Function(x.location, x.name, [_theory_term_to_term(a) for a in x.arguments])
 
     elif x.ast_type == ASTType.TheorySequence:
         if x.tuple_type == ast.TheoryTupleType.Tuple:
-            return Function(x.location, "", [_theory_term_to_term(a) for a in x.terms])
+            args = [_theory_term_to_term(a) for a in x.arguments]
+            return ast.TermTuple(_get_lib(), x.location, [ast.ArgumentTuple(_get_lib(), args)])
 
     raise RuntimeError(f"{location_to_str(x.location)}: invalid term `{x}`")
 
@@ -1561,12 +1568,12 @@ def _theory_term_to_literal(
 
     elif (
         x.ast_type == ASTType.SymbolicTerm
-        and x.symbol.type == clingo.SymbolType.Function
+        and x.symbol.type == clingo.symbol.SymbolType.Function
         and x.symbol.name
     ):
         atom = _build_atom(
             x.location,
-            (positive == x.symbol.positive),
+            (positive == x.symbol.is_positive),
             x.symbol.name,
             [SymbolicTerm(x.location, a) for a in x.symbol.arguments],
         )
