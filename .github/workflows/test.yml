@@ -12,21 +12,8 @@ jobs:
       fail-fast: false
       matrix:
         os: ['ubuntu-latest']
-        python-version: ['3.9', '3.11', '3.12','3.14']
-        clingo-version: ['>=5.5.0,<5.6.0','>=5.6.0,<5.7.0','>=5.7.0,<5.8.0', '>=5.8.0,<5.9.0']
-        exclude:
-          - python-version: '3.11'
-            clingo-version: '>=5.5.0,<5.6.0'
-          - python-version: '3.12'
-            clingo-version: '>=5.5.0,<5.6.0'
-          - python-version: '3.12'
-            clingo-version: '>=5.6.0,<5.7.0'
-          - python-version: '3.14'
-            clingo-version: '>=5.5.0,<5.6.0'
-          - python-version: '3.14'
-            clingo-version: '>=5.6.0,<5.7.0'
-          - python-version: '3.14'
-            clingo-version: '>=5.7.0,<5.8.0'
+        python-version: ['3.12','3.14']
+        clingo-version: ['>=6.0.0,<7.0.0']
 
     steps:
     - uses: actions/checkout@v6
@@ -39,8 +26,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install "clingo${{ matrix.clingo-version }}"
-        python -m pip install clingox==1.2.1.post2 --extra-index-url https://test.pypi.org/simple/
+        python -m pip install --extra-index-url https://test.pypi.org/simple "clingo${{ matrix.clingo-version }}"
         python -m pip install nox
         python -m pip install isort
 
@@ -62,10 +48,10 @@ jobs:
         pip list
 
     - name: run all tests and static checks
-      if: matrix.python-version == '3.12' && matrix.clingo-version == '>=5.7.0,<5.8.0'
+      if: matrix.python-version == '3.12' && matrix.clingo-version == '>=6.0.0,<7.0.0'
       run: nox -r
 
     - name: run only tests
-      if: matrix.python-version != '3.12' || matrix.clingo-version != '>=5.7.0,<5.8.0'
+      if: matrix.python-version != '3.12' || matrix.clingo-version != '>=6.0.0,<7.0.0'
       run: nox -rs all_tests
 
