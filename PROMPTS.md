@@ -13,7 +13,7 @@ Create a plan to modify the code from using version 5.8 to version 6.
   - In version 6, each node type has its own class.
   - For example, an object of the class `AST` with `ast_type = clingo.ast.ASTType.Rule` in version 5.8 corresponds to an object of the class `clingo.ast.StatementRule`.
   - Identify each `ASTType.*` in version 5.8 with is corresponding class in version 6. For example, `clingo.ast.ASTType.Rule` correspons to `clingo.ast.StatementRule`. Make a list of these correspondences to remember later.
-- In version 5.8, there is a class `Transformer`. In version 6, we must use  `node.transform(lib, obj)`, `node.update(lib, **kw)`, `node.visit(obj)` instead. Check the `SKILLS.md` file.
+- In version 5.8, there is a class `Transformer`. In version 6, we must use  `node.transform(lib, obj)`, `node.update(lib, **kw)`, `node.visit(obj)` instead. Check the the skill `clingo-5vs6-transformer`.
 - Create an order for the submodules to start rewritting.
   - Start by describing the changes to `src/eclingo/clingox` and its subpackages. You will need to modify the tests in `tests/clingox` accordingly. Inside this module, start by submodules that have no dependencies in the project. Then, submodules that use the already modified modules.
   - Continue making a list for the rest of modules. Frist submodules that have no dependencies in the project Then, submodules that use the already modified modules.
