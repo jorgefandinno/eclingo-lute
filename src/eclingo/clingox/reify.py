@@ -2,7 +2,8 @@
 This module provides functions to reify programs.
 
 This includes a `Reifier` implementing clingo's `clingo.backend.Observer`
-interface that can be registered with a `clingo.control.Control` object.
+interface that can be passed to `clingo.control.Control.observe` after
+grounding to inspect the current ground program.
 
 Additionally, the module provides a `ReifiedTheory` class that provides a
 similar interface as clingo's theory atoms but uses the reified symbols.
@@ -13,9 +14,11 @@ Examples
 The following example uses the `reify_program` function to reify a program:
 
 ```python-repl
+>>> from clingo.core import Library
 >>> from eclingo.clingox.reify import reify_program
+>>> lib = Library()
 >>> prg = 'b :- a. {a}.'
->>> symbols = reify_program(prg)
+>>> symbols = reify_program(lib, prg)
 >>> print([str(sym) for sym in symbols])
 ['tag(incremental)', 'atom_tuple(0)', 'atom_tuple(0,1)', 'literal_tuple(0)',
 'rule(choice(0),normal(0))', 'atom_tuple(1)', 'atom_tuple(1,2)',
@@ -26,13 +29,15 @@ The following example uses the `reify_program` function to reify a program:
 The last example shows how to use the `ReifiedTheory` class.
 
 ```python-repl
+>>> from clingo.core import Library
 >>> from eclingo.clingox.reify import ReifiedTheory, reify_program
+>>> lib = Library()
 >>> prg = '#theory theory { t { }; &p/0 : t, any }. &p { t }.'
->>> thy = ReifiedTheory(reify_program(prg))
+>>> thy = ReifiedTheory(reify_program(lib, prg))
 >>> print([str(atm) for atm in thy])
 ['&p { t: literal_tuple(0) }']
 >>> from eclingo.clingox.theory import evaluate
->>> evaluate(next(iter(thy)).term)
+>>> evaluate(lib, next(iter(thy)).term)
 Function('p', [], True)
 ```
 """
@@ -51,10 +56,11 @@ from typing import (
     TypeVar,
 )
 
-from clingo.backend import HeuristicType, Observer, TruthValue
+from clingo.backend import ExternalType, HeuristicType, Observer
+from clingo.base import Base, TheoryTermType
 from clingo.control import Control
+from clingo.core import Library
 from clingo.symbol import Function, Number, String, Symbol
-from clingo.theory_atoms import TheoryTermType
 
 from .theory import is_operator
 
@@ -184,29 +190,25 @@ class _StepData:
     wlit_tuples: Dict[Sequence[Tuple[int, int]], int] = field(default_factory=dict)
     theory_tuples: Dict[Sequence[int], int] = field(default_factory=dict)
     theory_element_tuples: Dict[Sequence[int], int] = field(default_factory=dict)
+    theory_term_ids: Dict[tuple, int] = field(default_factory=dict)
+    theory_element_ids: Dict[tuple, int] = field(default_factory=dict)
     graph: _Graph = field(default_factory=_Graph)
-
-
-def _theory(i: Symbol, pos: int, lit: int) -> Sequence[Symbol]:
-    return [i, Number(pos), Number(lit)]
-
-
-def _lit(i: Symbol, pos: int, lit: int) -> Sequence[Symbol]:
-    # pylint: disable=unused-argument
-    return [i, Number(lit)]
-
-
-def _wlit(i: Symbol, pos: int, wlit: Tuple[int, int]) -> Sequence[Symbol]:
-    # pylint: disable=unused-argument
-    return [i, Number(wlit[0]), Number(wlit[1])]
 
 
 class Reifier(Observer):
     """
-    An observer that will gather the symbols of the reification, in the same way as `clingo --output=reify`.
+    An observer that will gather the symbols of the reification, in the same
+    way as `clingo --output=reify`.
+
+    Unlike with clingo 5, where observers were registered before grounding,
+    this observer must be passed to `clingo.control.Control.observe` after
+    grounding, which replays the current ground program. The output table and
+    the theory atoms are reified from the base passed to `end_step`.
 
     Parameters
     ----------
+    lib
+        The library storing symbols
     cb
         A callback function that will be called with each symbol of the reification
     calculate_sccs
@@ -217,6 +219,7 @@ class Reifier(Observer):
     """
 
     # pylint:disable=too-many-public-methods
+    _lib: Library
     _step: int
     # Bug in mypy???
     # _cb: Callable[[Symbol], None]
@@ -226,10 +229,13 @@ class Reifier(Observer):
 
     def __init__(
         self,
+        lib: Library,
         cb: Callable[[Symbol], None],
         calculate_sccs: bool = False,
         reify_steps: bool = False,
     ):
+        super().__init__()
+        self._lib = lib
         self._step = 0
         self._cb = cb
         self._calculate_sccs = calculate_sccs
@@ -246,7 +252,7 @@ class Reifier(Observer):
         """
         for idx, scc in enumerate(self._step_data.graph.tarjan()):
             for atm in scc:
-                self._output("scc", [Number(idx), Number(atm)])
+                self._output("scc", [Number(self._lib, idx), Number(self._lib, atm)])
 
     def _add_edges(self, head: Sequence[int], body: Sequence[int]):
         if self._calculate_sccs:
@@ -257,8 +263,19 @@ class Reifier(Observer):
 
     def _output(self, name: str, args: Sequence[Symbol]):
         if self._reify_steps:
-            args = list(args) + [Number(self._step)]
-        self._cb(Function(name, args))
+            args = list(args) + [Number(self._lib, self._step)]
+        self._cb(Function(self._lib, name, args))
+
+    def _theory(self, i: Symbol, pos: int, lit: int) -> Sequence[Symbol]:
+        return [i, Number(self._lib, pos), Number(self._lib, lit)]
+
+    def _lit(self, i: Symbol, pos: int, lit: int) -> Sequence[Symbol]:
+        # pylint: disable=unused-argument
+        return [i, Number(self._lib, lit)]
+
+    def _wlit(self, i: Symbol, pos: int, wlit: Tuple[int, int]) -> Sequence[Symbol]:
+        # pylint: disable=unused-argument
+        return [i, Number(self._lib, wlit[0]), Number(self._lib, wlit[1])]
 
     def _tuple(
         self,
@@ -282,7 +299,7 @@ class Reifier(Observer):
             ident = tuple(sorted(pruned))
 
         n = len(snmap)
-        i = Number(snmap.setdefault(ident, n))
+        i = Number(self._lib, snmap.setdefault(ident, n))
         if n == i.number:
             self._output(name, [i])
             for idx, atm in enumerate(pruned):
@@ -290,161 +307,245 @@ class Reifier(Observer):
         return i
 
     def _atom_tuple(self, atoms: Sequence[int]):
-        return self._tuple("atom_tuple", self._step_data.atom_tuples, atoms, _lit)
+        return self._tuple("atom_tuple", self._step_data.atom_tuples, atoms, self._lit)
 
     def _lit_tuple(self, lits: Sequence[int]):
-        return self._tuple("literal_tuple", self._step_data.lit_tuples, lits, _lit)
+        return self._tuple("literal_tuple", self._step_data.lit_tuples, lits, self._lit)
 
     def _wlit_tuple(self, wlits: Sequence[Tuple[int, int]]):
         return self._tuple(
-            "weighted_literal_tuple", self._step_data.wlit_tuples, wlits, _wlit
+            "weighted_literal_tuple", self._step_data.wlit_tuples, wlits, self._wlit
         )
 
     def init_program(self, incremental: bool) -> None:
         if incremental:
-            self._cb(Function("tag", [Function("incremental")]))
+            self._cb(Function(self._lib, "tag", [Function(self._lib, "incremental")]))
 
     def begin_step(self) -> None:
         pass
 
-    def rule(self, choice: bool, head: Sequence[int], body: Sequence[int]) -> None:
+    def rule(self, head: Sequence[int], body: Sequence[int], choice: bool) -> None:
         hn = "choice" if choice else "disjunction"
-        hd = Function(hn, [self._atom_tuple(head)])
-        bd = Function("normal", [self._lit_tuple(body)])
+        hd = Function(self._lib, hn, [self._atom_tuple(head)])
+        bd = Function(self._lib, "normal", [self._lit_tuple(body)])
         self._output("rule", [hd, bd])
         self._add_edges(head, body)
 
     def weight_rule(
         self,
-        choice: bool,
         head: Sequence[int],
         lower_bound: int,
         body: Sequence[Tuple[int, int]],
+        choice: bool,
     ) -> None:
         hn = "choice" if choice else "disjunction"
-        hd = Function(hn, [self._atom_tuple(head)])
-        bd = Function("sum", [self._wlit_tuple(body), Number(lower_bound)])
+        hd = Function(self._lib, hn, [self._atom_tuple(head)])
+        bd = Function(
+            self._lib,
+            "sum",
+            [self._wlit_tuple(body), Number(self._lib, lower_bound)],
+        )
         self._output("rule", [hd, bd])
         self._add_edges(head, [lit for lit, w in body])
 
-    def minimize(self, priority: int, literals: Sequence[Tuple[int, int]]) -> None:
-        self._output("minimize", [Number(priority), self._wlit_tuple(literals)])
+    def minimize(self, literals: Sequence[Tuple[int, int]], priority: int) -> None:
+        self._output(
+            "minimize", [Number(self._lib, priority), self._wlit_tuple(literals)]
+        )
 
     def project(self, atoms: Sequence[int]) -> None:
         for atom in atoms:
-            self._output("project", [Number(atom)])
+            self._output("project", [Number(self._lib, atom)])
 
-    def output_atom(self, symbol: Symbol, atom: int) -> None:
-        self._output("output", [symbol, self._lit_tuple([] if atom == 0 else [atom])])
-
-    def output_term(self, symbol: Symbol, condition: Sequence[int]) -> None:
-        self._output("output", [symbol, self._lit_tuple(condition)])
-
-    def external(self, atom: int, value: TruthValue) -> None:
-        value_name = str(value).replace("TruthValue.", "").lower().rstrip("_")
-        self._output("external", [Number(atom), Function(value_name)])
+    def external(self, atom: int, type: ExternalType) -> None:
+        # pylint: disable=redefined-builtin
+        value_name = type.name.lower().rstrip("_")
+        self._output(
+            "external", [Number(self._lib, atom), Function(self._lib, value_name)]
+        )
 
     def assume(self, literals: Sequence[int]) -> None:
         for lit in literals:
-            self._output("assume", [Number(lit)])
+            self._output("assume", [Number(self._lib, lit)])
 
     def heuristic(
         self,
         atom: int,
-        type_: HeuristicType,
-        bias: int,
+        type: HeuristicType,
+        weight: int,
         priority: int,
         condition: Sequence[int],
     ) -> None:
-        type_name = str(type_).replace("HeuristicType.", "").lower().rstrip("_")
-        condition_lit = self._lit_tuple(condition)
+        # pylint: disable=redefined-builtin
+        type_name = type.name.lower().rstrip("_")
+        condition_lit = self._lit_tuple(list(condition))
         self._output(
             "heuristic",
             [
-                Number(atom),
-                Function(type_name),
-                Number(bias),
-                Number(priority),
+                Number(self._lib, atom),
+                Function(self._lib, type_name),
+                Number(self._lib, weight),
+                Number(self._lib, priority),
                 condition_lit,
             ],
         )
 
-    def acyc_edge(self, node_u: int, node_v: int, condition: Sequence[int]) -> None:
+    def edge(self, node_u: int, node_v: int, condition: Sequence[int]) -> None:
         self._output(
-            "edge", [Number(node_u), Number(node_v), self._lit_tuple(condition)]
-        )
-
-    def theory_term_number(self, term_id: int, number: int) -> None:
-        self._output("theory_number", [Number(term_id), Number(number)])
-
-    def theory_term_string(self, term_id: int, name: str) -> None:
-        self._output("theory_string", [Number(term_id), String(name)])
-
-    def theory_term_compound(
-        self, term_id: int, name_id_or_type: int, arguments: Sequence[int]
-    ) -> None:
-        names = {-1: "tuple", -2: "set", -3: "list"}
-        if name_id_or_type in names:
-            name = "theory_sequence"
-            value = Function(names[name_id_or_type])
-        else:
-            name = "theory_function"
-            value = Number(name_id_or_type)
-        tuple_id = self._tuple(
-            "theory_tuple", self._step_data.theory_tuples, arguments, _theory, True
-        )
-        self._output(name, [Number(term_id), value, tuple_id])
-
-    def theory_element(
-        self, element_id: int, terms: Sequence[int], condition: Sequence[int]
-    ) -> None:
-        tuple_id = self._tuple(
-            "theory_tuple", self._step_data.theory_tuples, terms, _theory, True
-        )
-        condition_id = self._tuple(
-            "literal_tuple", self._step_data.lit_tuples, condition, _lit
-        )
-        self._output("theory_element", [Number(element_id), tuple_id, condition_id])
-
-    def theory_atom(
-        self, atom_id_or_zero: int, term_id: int, elements: Sequence[int]
-    ) -> None:
-        tuple_e_id = self._tuple(
-            "theory_element_tuple",
-            self._step_data.theory_element_tuples,
-            elements,
-            _lit,
-        )
-        self._output(
-            "theory_atom", [Number(atom_id_or_zero), Number(term_id), tuple_e_id]
-        )
-
-    def theory_atom_with_guard(
-        self,
-        atom_id_or_zero: int,
-        term_id: int,
-        elements: Sequence[int],
-        operator_id: int,
-        right_hand_side_id: int,
-    ) -> None:
-        tuple_id = self._tuple(
-            "theory_element_tuple",
-            self._step_data.theory_element_tuples,
-            elements,
-            _lit,
-        )
-        self._output(
-            "theory_atom",
+            "edge",
             [
-                Number(atom_id_or_zero),
-                Number(term_id),
-                tuple_id,
-                Number(operator_id),
-                Number(right_hand_side_id),
+                Number(self._lib, node_u),
+                Number(self._lib, node_v),
+                self._lit_tuple(list(condition)),
             ],
         )
 
-    def end_step(self) -> None:
+    def _reify_theory_term(self, term) -> int:
+        """
+        Reify the given theory term of the base returning its id.
+        """
+        ids = self._step_data.theory_term_ids
+        term_type = term.type
+
+        key: tuple
+        if term_type == TheoryTermType.Number:
+            key = ("number", term.number)
+            if key not in ids:
+                ids[key] = len(ids)
+                self._output(
+                    "theory_number",
+                    [Number(self._lib, ids[key]), Number(self._lib, term.number)],
+                )
+            return ids[key]
+
+        if term_type == TheoryTermType.Symbol:
+            return self._reify_theory_string(term.name)
+
+        argument_ids = [self._reify_theory_term(a) for a in term.arguments]
+
+        if term_type == TheoryTermType.Function:
+            name_id = self._reify_theory_string(term.name)
+            key = ("function", name_id, tuple(argument_ids))
+            if key not in ids:
+                tuple_id = self._tuple(
+                    "theory_tuple",
+                    self._step_data.theory_tuples,
+                    argument_ids,
+                    self._theory,
+                    True,
+                )
+                ids[key] = len(ids)
+                self._output(
+                    "theory_function",
+                    [Number(self._lib, ids[key]), Number(self._lib, name_id), tuple_id],
+                )
+            return ids[key]
+
+        names = {
+            TheoryTermType.Tuple: "tuple",
+            TheoryTermType.Set: "set",
+            TheoryTermType.List: "list",
+        }
+        name = names[term_type]
+        key = (name, tuple(argument_ids))
+        if key not in ids:
+            tuple_id = self._tuple(
+                "theory_tuple",
+                self._step_data.theory_tuples,
+                argument_ids,
+                self._theory,
+                True,
+            )
+            ids[key] = len(ids)
+            self._output(
+                "theory_sequence",
+                [
+                    Number(self._lib, ids[key]),
+                    Function(self._lib, name),
+                    tuple_id,
+                ],
+            )
+        return ids[key]
+
+    def _reify_theory_string(self, name: str) -> int:
+        """
+        Reify the given theory string returning its id.
+        """
+        ids = self._step_data.theory_term_ids
+        key = ("string", name)
+        if key not in ids:
+            ids[key] = len(ids)
+            self._output(
+                "theory_string",
+                [Number(self._lib, ids[key]), String(self._lib, name)],
+            )
+        return ids[key]
+
+    def _reify_theory_element(self, element) -> int:
+        """
+        Reify the given theory element of the base returning its id.
+        """
+        term_ids = [self._reify_theory_term(term) for term in element.tuple]
+        tuple_id = self._tuple(
+            "theory_tuple",
+            self._step_data.theory_tuples,
+            term_ids,
+            self._theory,
+            True,
+        )
+        condition_id = self._lit_tuple(list(element.condition))
+
+        ids = self._step_data.theory_element_ids
+        key = (tuple_id.number, condition_id.number)
+        if key not in ids:
+            ids[key] = len(ids)
+            self._output(
+                "theory_element",
+                [Number(self._lib, ids[key]), tuple_id, condition_id],
+            )
+        return ids[key]
+
+    def _reify_theory_atom(self, atom) -> None:
+        """
+        Reify the given theory atom of the base.
+        """
+        term_id = self._reify_theory_term(atom.name)
+        element_ids = [self._reify_theory_element(el) for el in atom.elements]
+        tuple_e_id = self._tuple(
+            "theory_element_tuple",
+            self._step_data.theory_element_tuples,
+            element_ids,
+            self._lit,
+        )
+        args = [
+            Number(self._lib, atom.literal),
+            Number(self._lib, term_id),
+            tuple_e_id,
+        ]
+        guard = atom.guard
+        if guard is not None:
+            operator_id = self._reify_theory_string(guard[0])
+            rhs_id = self._reify_theory_term(guard[1])
+            args.append(Number(self._lib, operator_id))
+            args.append(Number(self._lib, rhs_id))
+        self._output("theory_atom", args)
+
+    def end_step(self, base: Base) -> None:
+        """
+        Reify the theory atoms and the output table of the base.
+        """
+        for atom in base.theory:
+            self._reify_theory_atom(atom)
+        for atom_base in base.values():
+            for base_atom in atom_base.values():
+                condition: Sequence[int] = (
+                    [] if base.is_fact(base_atom.literal) else [base_atom.literal]
+                )
+                self._output("output", [base_atom.symbol, self._lit_tuple(condition)])
+        for term in base.terms.values():
+            for condition in term.condition:
+                self._output("output", [term.symbol, self._lit_tuple(list(condition))])
+
         if self._reify_steps:
             self.calculate_sccs()
             self._step += 1
@@ -453,17 +554,16 @@ class Reifier(Observer):
 
 def _set(
     matches: Sequence[Tuple[str, int]],
-    lst: List[Symbol],
+    lst: List,
     sym,
     append: bool = False,
-    default: Symbol = Number(0),
 ) -> bool:
     for match in matches:
         if not sym.match(*match):
             continue
         idx = len(lst) if append else sym.arguments[0].number
         while len(lst) <= idx:
-            lst.append(default)
+            lst.append(None)
         lst[idx] = sym
         return True
     return False
@@ -494,7 +594,7 @@ class ReifiedTheory:
 
     The `ReifiedTheoryTerm`, `ReifiedTheoryElement`, and `ReifiedTheoryElement`
     classes provide views on this data that behave as the corresponding classes
-    in clingo's `clingo.theory_atoms` module.
+    in clingo's `clingo.base` module.
     """
 
     terms: List[Symbol]
@@ -512,7 +612,12 @@ class ReifiedTheory:
 
         for sym in symbols:
             _ = (
-                _set((("theory_atom", 3), ("theory_atom", 5)), self.atoms, sym, True)
+                _set(
+                    (("theory_atom", 3), ("theory_atom", 5)),
+                    self.atoms,
+                    sym,
+                    True,
+                )
                 or _set((("theory_element", 3),), self.elements, sym)
                 or _set(
                     (
@@ -796,13 +901,18 @@ class ReifiedTheoryAtom:
 
 
 def reify_program(
-    prg: str, calculate_sccs: bool = False, reify_steps: bool = False
+    lib: Library,
+    prg: str,
+    calculate_sccs: bool = False,
+    reify_steps: bool = False,
 ) -> List[Symbol]:
     """
     Reify the given program and return the reified symbols.
 
     Parameters
     ----------
+    lib
+        The library storing symbols.
     prg
         The program to reify in form of a string.
     calculate_sccs
@@ -815,11 +925,11 @@ def reify_program(
     A list of symbols containing the reified facts.
     """
     ret: List[Symbol] = []
-    ctl = Control()
-    reifier = Reifier(ret.append, calculate_sccs, reify_steps)
-    ctl.register_observer(reifier)
-    ctl.add("base", [], prg)
-    ctl.ground([("base", [])])
+    ctl = Control(lib)
+    reifier = Reifier(lib, ret.append, calculate_sccs, reify_steps)
+    ctl.parse_string(prg)
+    ctl.ground()
+    ctl.observe(reifier, preprocess=False)
     if calculate_sccs and not reify_steps:
         reifier.calculate_sccs()
 

@@ -3,8 +3,10 @@ import unittest
 from typing import List
 
 import eclingo
+from clingo.core import Library
 from eclingo.solver.generator import GeneratorReification
 from eclingo.solver.tester import CandidateTesterReification
+from tests.generated_programs import lib as _generated_lib
 from tests.generated_programs import programs
 from tests.parse_programs import parse_program
 
@@ -14,16 +16,16 @@ config.preprocessing_level = 3
 config.propagate = False
 
 
-def fast_preprocessing(program):
-    program = parse_program(program)
-    tester = CandidateTesterReification(config, program)
+def fast_preprocessing(lib, program):
+    program = parse_program(lib, program)
+    tester = CandidateTesterReification(lib, config, program)
     ret = tester.fast_preprocessing()
     return ret
 
 
-def generate_candidates(program, preprocessing_result):
-    program = parse_program(program)
-    generator = GeneratorReification(config, program, preprocessing_result)
+def generate_candidates(lib, program, preprocessing_result):
+    program = parse_program(lib, program)
+    generator = GeneratorReification(lib, config, program, preprocessing_result)
     ret = list(generator())
     return ret
 
@@ -41,6 +43,11 @@ Expected result:
 
 
 class PreprocessorTestCase(unittest.TestCase):
+    def setUp(self):
+        # the candidates are compared against the generated test data, so the
+        # library of the generated data is used
+        self.lib = _generated_lib
+
     # def assert_models(self, models, expected):
     # discarding assumptiosn from the comparison
     # models = [Candidate(pos=m.pos, neg=m.neg) for m in models]
@@ -56,7 +63,7 @@ class PreprocessorTestCase(unittest.TestCase):
                         i, program.program, program.fast_preprocessing_str
                     )
                 ):
-                    ret = fast_preprocessing(prg)
+                    ret = fast_preprocessing(self.lib, prg)
                     if program.fast_preprocessing is None:
                         self.assertTrue(ret.unsatisfiable)
                     else:
@@ -88,10 +95,10 @@ class PreprocessorTestCase(unittest.TestCase):
                         i, program.program, program.candidates_02_str
                     )
                 ):
-                    ret = fast_preprocessing(prg)
+                    ret = fast_preprocessing(self.lib, prg)
                     if ret is None:
                         continue
-                    candidates = generate_candidates(prg, ret)
+                    candidates = generate_candidates(self.lib, prg, ret)
                     candidate_str = [
                         (sorted(str(a) for a in c.pos), sorted(str(a) for a in c.neg))
                         for c in candidates

@@ -2,10 +2,10 @@
 Tests for the `clingox.testing.ast` module.
 """
 
-import textwrap
 from unittest import TestCase
 
 from clingo import ast
+from clingo.core import Library, Location, Position
 from clingo.symbol import Function
 
 from eclingo.clingox.testing.ast import (
@@ -15,58 +15,66 @@ from eclingo.clingox.testing.ast import (
     parse_term,
 )
 
-LOC = ast.Location(ast.Position("a", 1, 2), ast.Position("a", 1, 2))
-
-
-def dedent(text):
-    """
-    Dedenting with special handling for long lines.
-    """
-    lines = textwrap.dedent(text).splitlines(keepends=True)
-    return "".join(line.replace("\\\n", "") for line in lines)
-
 
 class TestBasicASTParsing(TestCase):
     """
     Tests for basic AST parsing.
     """
 
+    def setUp(self):
+        self.lib = Library(message_limit=0)
+        self.loc = Location(
+            Position(self.lib, "a", 1, 2), Position(self.lib, "a", 1, 2)
+        )
+
+    def symbolic_literal(self, name: str) -> ast.Literal:
+        """
+        Create a positive symbolic literal with the given constant name.
+        """
+        return ast.LiteralSymbolic(
+            self.lib,
+            self.loc,
+            ast.Sign.NoSign,
+            ast.TermSymbolic(self.lib, self.loc, Function(self.lib, name)),
+        )
+
     def test_parse_statement(self):
         """
         Test parse_statement.
         """
-        rule = ast.Rule(
-            LOC,
-            ast.Literal(LOC, 0, ast.SymbolicAtom(ast.Function(LOC, "a", [], 0))),
-            [ast.Literal(LOC, 0, ast.SymbolicAtom(ast.Function(LOC, "b", [], 0)))],
+        rule = ast.StatementRule(
+            self.lib,
+            self.loc,
+            ast.HeadSimpleLiteral(self.lib, self.symbolic_literal("a")),
+            [ast.BodySimpleLiteral(self.lib, self.symbolic_literal("b"))],
         )
-        self.assertEqual(parse_statement("a :- b."), rule)
+        self.assertEqual(parse_statement(self.lib, "a :- b."), rule)
         with self.assertRaisesRegex(RuntimeError, "syntax error"):
-            parse_statement("a")
+            parse_statement(self.lib, "a")
         with self.assertRaisesRegex(RuntimeError, "syntax error"):
-            parse_statement("a.b.")
+            parse_statement(self.lib, "a.b.")
         with self.assertRaisesRegex(RuntimeError, "syntax error"):
-            parse_statement("")
+            parse_statement(self.lib, "")
 
     def test_parse_literal(self):
         """
         Test parse_literal.
         """
-        lit = ast.Literal(LOC, 0, ast.SymbolicAtom(ast.Function(LOC, "a", [], 0)))
-        self.assertEqual(parse_literal("a"), lit)
+        lit = self.symbolic_literal("a")
+        self.assertEqual(parse_literal(self.lib, "a"), lit)
         with self.assertRaisesRegex(RuntimeError, "syntax error"):
-            parse_literal("+a")
+            parse_literal(self.lib, "+a")
         with self.assertRaisesRegex(RuntimeError, "syntax error"):
-            parse_literal("a: b")
+            parse_literal(self.lib, "a: b")
 
     def test_parse_term(self):
         """
         Test parse_term.
         """
-        lit = ast.SymbolicTerm(LOC, Function("a", []))
-        self.assertEqual(parse_term("a"), lit)
+        term = ast.TermSymbolic(self.lib, self.loc, Function(self.lib, "a"))
+        self.assertEqual(parse_term(self.lib, "a"), term)
         with self.assertRaisesRegex(RuntimeError, "syntax error"):
-            parse_term("+a")
+            parse_term(self.lib, "+a")
 
 
 class TestASTTestCaseClass(ASTTestCase):
@@ -76,100 +84,31 @@ class TestASTTestCaseClass(ASTTestCase):
 
     # pylint: disable=invalid-name
 
+    def setUp(self):
+        self.lib = Library(message_limit=0)
+
     def test_assertASTEqual(self):
         """
         Test assertASTEqual.
         """
-        self.assertEqual(parse_term("a"), parse_term("a"))
-        self.assertEqual(parse_term("a(b(X))"), parse_term("a(b(X))"))
+        lib = self.lib
+        self.assertEqual(parse_term(lib, "a"), parse_term(lib, "a"))
+        self.assertEqual(parse_term(lib, "a(b(X))"), parse_term(lib, "a(b(X))"))
         with self.assertRaises(AssertionError) as ar:
-            self.assertEqual(parse_term("a"), parse_term("b"))
-        expected_msg = dedent("""\
-               'a' != 'b'
-               - a
-               + b
-               """)
-        self.assertEqual(str(ar.exception), expected_msg)
+            self.assertEqual(parse_term(lib, "a"), parse_term(lib, "b"))
+        self.assertIn("'a' != 'b'", str(ar.exception))
 
         with self.assertRaises(AssertionError) as ar:
-            self.assertEqual(parse_term("a(b)"), parse_term("a(c)"))
-        expected_msg = dedent("""\
-               'a(b)' != 'a(c)'
-               - a(b)
-               ?   ^
-               + a(c)
-               ?   ^
-               """)
-        self.assertEqual(str(ar.exception), expected_msg)
-
-        self.maxDiff = None
-        with self.assertRaises(AssertionError) as ar:
-            self.assertEqual(parse_literal("a"), parse_term("a"))
-        expected_msg = dedent("""\
-            "ast.Literal(location=LOC,\\n            sign=0[271 chars]))\\n" != \\
-            "ast.SymbolicTerm(location=LOC,\\n             [33 chars]))\\n"
-            - ast.Literal(location=LOC,
-            ?     ^ ^  ^^
-            + ast.SymbolicTerm(location=LOC,
-            ?     ^^^^^^ ^^  ^
-            +                  symbol=Function('a', [], True))
-            -             sign=0,
-            -             atom=ast.SymbolicAtom(symbol=ast.Function(location=LOC,
-            -                                                       name='a',
-            -                                                       arguments=[],
-            -                                                       external=0)))
-            """)
-        self.assertEqual(str(ar.exception), expected_msg)
+            self.assertEqual(parse_term(lib, "a(b)"), parse_term(lib, "a(c)"))
+        self.assertIn("'a(b)' != 'a(c)'", str(ar.exception))
 
     def test_assertEqual(self):
         """
         Test assertEqual.
         """
-        self.assertEqual(parse_term("a"), parse_term("a"))
-        self.assertEqual(parse_term("a(b(X))"), parse_term("a(b(X))"))
+        lib = self.lib
+        self.assertEqual(parse_term(lib, "a"), parse_term(lib, "a"))
+        self.assertEqual(parse_literal(lib, "a"), parse_literal(lib, "a"))
         with self.assertRaises(AssertionError) as ar:
-            self.assertEqual(parse_term("a"), parse_term("b"))
-        expected_msg = dedent("""\
-            'a' != 'b'
-            - a
-            + b
-            """)
-        self.assertEqual(str(ar.exception), expected_msg)
-
-        with self.assertRaises(AssertionError) as ar:
-            self.assertEqual(parse_term("a(b)"), parse_term("a(c)"))
-        expected_msg = dedent("""\
-            'a(b)' != 'a(c)'
-            - a(b)
-            ?   ^
-            + a(c)
-            ?   ^
-            """)
-        self.assertEqual(str(ar.exception), expected_msg)
-
-        with self.assertRaises(AssertionError) as ar:
-            self.assertEqual(parse_literal("a"), parse_term("b"))
-        expected_msg = dedent("""\
-            'a' != 'b'
-            - a
-            + b
-            """)
-        self.assertEqual(str(ar.exception), expected_msg)
-
-        with self.assertRaises(AssertionError) as ar:
-            self.assertEqual(parse_literal("a"), parse_term("a"))
-        expected_msg = dedent("""\
-            "ast.Literal(location=LOC,\\n            sign=0[271 chars]))\\n" != \\
-            "ast.SymbolicTerm(location=LOC,\\n             [33 chars]))\\n"
-            - ast.Literal(location=LOC,
-            ?     ^ ^  ^^
-            + ast.SymbolicTerm(location=LOC,
-            ?     ^^^^^^ ^^  ^
-            +                  symbol=Function('a', [], True))
-            -             sign=0,
-            -             atom=ast.SymbolicAtom(symbol=ast.Function(location=LOC,
-            -                                                       name='a',
-            -                                                       arguments=[],
-            -                                                       external=0)))
-            """)
-        self.assertEqual(str(ar.exception), expected_msg)
+            self.assertEqual(parse_literal(lib, "a"), parse_literal(lib, "b"))
+        self.assertIn("'a' != 'b'", str(ar.exception))

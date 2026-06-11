@@ -1,4 +1,5 @@
 import clingo.ast as _ast
+from clingo.core import Library
 
 from eclingo.config import AppConfig
 from eclingo.parsing.parser import parse_program as _parse_program
@@ -20,16 +21,17 @@ def _flatten(lst):
 class ParsingTestHelper(helper.TestHelper):
     def setUp(self):
         super().setUp()
+        self.lib = Library(message_limit=0)
         self.config: AppConfig = AppConfig(semantics="c19-1")
 
     def parse_program(self, stm, parameters=(), name="base"):
         ret = []
-        _parse_program(stm, ret.append, parameters, name, config=self.config)
+        _parse_program(self.lib, stm, ret.append, parameters, name, config=self.config)
         return _flatten(ret)
 
     def clingo_parse_program(self, stm):
         ret = []
-        _ast.parse_string(stm, ret.append)
+        _ast.parse_string(self.lib, stm, ret.append)
         return ret
 
     def assert_equal_parsing_program(self, program, expected_program):
@@ -38,8 +40,8 @@ class ParsingTestHelper(helper.TestHelper):
 
     def __assert_equal_parsing_program(self, parsed_program, expected_program):
         expected_program = self.clingo_parse_program(expected_program)
-        parsed_program.sort()
-        expected_program.sort()
+        parsed_program.sort(key=str)
+        expected_program.sort(key=str)
         self.assertEqual(len(parsed_program), len(expected_program))
         for r1, r2 in zip(parsed_program, expected_program):
             self.assertEqual(str(r1), str(r2))

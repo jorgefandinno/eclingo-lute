@@ -1,10 +1,13 @@
 import unittest
 
 from clingo import ast
+from clingo.core import Library
 
 from eclingo.parsing import parser
 
 # python -m unittest tests.test_parsing.Test.
+
+_lib = Library(message_limit=0)
 
 
 def flatten(lst):
@@ -21,19 +24,21 @@ def flatten(lst):
 
 def parse_program(stm, parameters=[], name="base"):
     ret = []
-    parser.parse_program(stm, ret.append, parameters, name)
+    parser.parse_program(_lib, stm, ret.append, parameters, name)
     return flatten(ret)
 
 
 def parse_program_m_normal_form(stm, parameters=[], name="base"):
     ret = []
-    parser.parse_program(stm, ret.append, parameters, name, only_m_normal_form=True)
+    parser.parse_program(
+        _lib, stm, ret.append, parameters, name, only_m_normal_form=True
+    )
     return flatten(ret)
 
 
 def clingo_parse_program(stm):
     ret = []
-    ast.parse_string(stm, ret.append)
+    ast.parse_string(_lib, stm, ret.append)
     ret = [str(rule) for rule in ret]
     return ret
 
@@ -260,13 +265,13 @@ class TestOnlyMNormalForm(TestCase):
         # only_m_normal_form=True returns after parse_m_literals, before reification (lines 95-96)
         self.assert_equal_str_program(
             parse_program_m_normal_form(":- &m{a}."),
-            ["#program base.", "#false :- not &k { not a }."],
+            ["#program base.", " :- not &k { (not a) }."],
         )
 
     def test_m_atom_with_negation(self):
         self.assert_equal_str_program(
             parse_program_m_normal_form(":- &m{not a}."),
-            ["#program base.", "#false :- not &k { not not a }."],
+            ["#program base.", " :- not &k { (not (not a)) }."],
         )
 
     def test_plain_rule_unchanged(self):

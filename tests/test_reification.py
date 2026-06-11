@@ -1,9 +1,12 @@
 from clingo import ast
-from eclingo.clingox.testing.ast import ASTTestCase
+from clingo.core import Library
 
+from eclingo.clingox.testing.ast import ASTTestCase
 from eclingo.config import AppConfig
 from eclingo.parsing import parser
 from eclingo.parsing.transformers import function_transformer
+
+_lib = Library(message_limit=0)
 
 # python -m unittest tests.test_reification.Test.test_epistemic_atom
 
@@ -23,6 +26,7 @@ def flatten(lst):
 def parse_program(stm, parameters=[], name="base"):
     ret = []
     parser.parse_program(
+        _lib,
         stm,
         ret.append,
         parameters,
@@ -34,7 +38,7 @@ def parse_program(stm, parameters=[], name="base"):
 
 def clingo_parse_program(stm):
     ret = []
-    ast.parse_string(stm, ret.append)
+    ast.parse_string(_lib, stm, ret.append)
     ret = [rule for rule in ret]
     return ret
 
@@ -46,16 +50,17 @@ class TestCase(ASTTestCase):
     def assert_equal_program(self, program, expected):
         expected_program = clingo_parse_program(expected)
         expected_program = [
-            function_transformer.rule_to_symbolic_term_adapter(stm)
+            function_transformer.rule_to_symbolic_term_adapter(_lib, stm)
             for stm in expected_program
         ]
 
         program = [
-            function_transformer.rule_to_symbolic_term_adapter(stm) for stm in program
+            function_transformer.rule_to_symbolic_term_adapter(_lib, stm)
+            for stm in program
         ]
 
-        sorted_program = sorted(program)
-        expected_program.sort()
+        sorted_program = sorted(program, key=str)
+        expected_program.sort(key=str)
 
         if len(sorted_program) != len(expected_program):
             self.fail(

@@ -1,9 +1,10 @@
 import sys
 import time
-from typing import Iterable, List, Optional, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple
 
-from clingo import Symbol
-from clingo.ast import AST
+from clingo.ast import Statement
+from clingo.core import Library
+from clingo.symbol import Symbol
 
 from eclingo.config import AppConfig
 from eclingo.grounder import Grounder
@@ -11,12 +12,13 @@ from eclingo.parsing import parser
 from eclingo.solver import SolverReification
 
 
-def parse_program(stm, parameters=None, name: str = "base") -> List[AST]:
+def parse_program(lib: Library, stm, parameters=None, name: str = "base") -> List:
     """Helping function to parse program for flag: --output-e=rewritten"""
     if parameters is None:
         parameters = []
-    ret: List[AST] = []
+    ret: List = []
     parser.parse_program(
+        lib,
         stm,
         ret.append,
         parameters,
@@ -27,13 +29,13 @@ def parse_program(stm, parameters=None, name: str = "base") -> List[AST]:
 
 
 class Control(object):
-    def __init__(self, control, config=None) -> None:
-        # if control is not None:
-        self.project = control.configuration.solve.project
-        self.max_models = int(control.configuration.solve.models)
-        control.configuration.solve.project = "auto,3"
-        control.configuration.solve.models = 0
-        self.rewritten_program: List[AST] = []
+    def __init__(self, lib, control, config=None) -> None:
+        self.lib = lib
+        self.project = control.config.solve.project.value
+        self.max_models = int(control.config.solve.models.value)
+        control.config.solve.project.value = "auto,3"
+        control.config.solve.models.value = "0"
+        self.rewritten_program: List[Statement] = []
         self.control = control
         if config is None:
             config = AppConfig(semantics="c19-1")
@@ -42,7 +44,7 @@ class Control(object):
         if self.max_models == 0:
             self.max_models = sys.maxsize
 
-        self.grounder = Grounder(self.control, self.config)
+        self.grounder = Grounder(self.lib, self.control, self.config)
         self.models = 0
         self.grounded = False
         self.solver: Optional[SolverReification] = None
@@ -52,7 +54,7 @@ class Control(object):
 
     def add_program(self, program) -> None:
         if self.config.eclingo_rewritten == "rewritten":
-            self.rewritten_program.extend(parse_program(program))
+            self.rewritten_program.extend(parse_program(self.lib, program))
         else:
             self.grounder.add_program(program)
 
@@ -76,7 +78,9 @@ class Control(object):
         if not self.grounded:
             self.ground()
         start_time = time.time()
-        self.solver = SolverReification(self.grounder.reified_facts, self.config)
+        self.solver = SolverReification(
+            self.lib, self.grounder.reified_facts, self.config
+        )
         self.grounding_time += time.time() - start_time - self.solver.preprocessing_time
 
     def solve(self):

@@ -1,8 +1,11 @@
 from pathlib import Path
-from typing import Iterator, Optional, Sequence, Tuple, cast
+from typing import Iterator, Optional, Sequence
 
-import clingo
-from clingo import Function, Symbol
+from clingo.backend import ExternalType
+from clingo.control import Control
+from clingo.core import Library
+from clingo.solve import Model
+from clingo.symbol import Function, Symbol
 
 from eclingo import util
 from eclingo.clingox.backend import SymbolicBackend
@@ -10,8 +13,6 @@ from eclingo.config import AppConfig
 from eclingo.solver.tester import PreprocessingResult
 
 from .candidate import Assumptions, Candidate
-
-# from eclingo.clingox.solving import approximate
 
 current_script_path = Path(__file__).parent
 
@@ -21,21 +22,6 @@ with open(current_script_path / "base_program.lp") as f:
 
 with open(current_script_path / "generator_opt_common_program.lp") as f:
     common_opt_program = f.read()
-
-# common_opt_program = """\
-# symbolic_atom(SA) :- atom_map(SA, _).
-
-# symbolic_epistemic_atom(k(A)) :- symbolic_atom(k(A)).
-# symbolic_objective_atom(OSA)  :- symbolic_atom(OSA), not symbolic_epistemic_atom(OSA).
-
-# epistemic_atom_map(KSA, KA) :- atom_map(KSA, KA), symbolic_epistemic_atom(KSA).
-# objective_atom_map(OSA, OA) :- atom_map(OSA, OA), symbolic_objective_atom(OSA).
-
-# epistemic_atom_int(KA) :- epistemic_atom_map(_, KA).
-# objective_atom_int(A)  :- objective_atom_map(_, A).
-
-# epistemic_map(KA,OA) :- epistemic_atom_map(KSA, KA), objective_atom_map(OSA, OA), KSA = k(OSA).
-# """
 
 
 preprocessing_program = """\
@@ -47,21 +33,10 @@ positive_extra_assumptions(OSA) :- cautious(OSA), symbolic_epistemic_atom(k(OSA)
 % kp_hold(KA) :- epistemic_atom_map(k(SA), KA), cautious_objetive(SA).
 """
 
-# kp_hold(A) :- cautious(SA),  objective_atom_map(SA, A).
-# cautious_epistemic(KSA) :- cautious(KSA), symbolic_epistemic_atom(KSA).
-# :- epistemic_atom_map(KSA, KA), cautious_epistemic(KSA), not hold(KA).
-
 
 with open(current_script_path / "generator_opt_fact_program.lp") as f:
     fact_optimization_program = f.read()
 
-# fact_optimization_program = """\
-# % Propagate facts into epistemic facts
-
-# :- fact(OSA), epistemic_atom_map(k(OSA), KA), not hold(KA).
-# positive_extra_assumptions(OSA) :- fact(OSA), symbolic_epistemic_atom(k(OSA)).
-# #show positive_extra_assumptions/1.
-# """
 
 propagation_program = """\
 :- kp_hold(OA), epistemic_map(KA, OA), not hold(KA).
@@ -126,64 +101,73 @@ exists_unproved :- explit_proven_candidates, unproved(_).
 :- not exists_unproved, only_unproved_candidates.
 """
 
-# kp_hold(OSA) :- fact(OSA).
-
-#   :- kp_hold(OSA),    objective_atom_map(SA, A).
-# % negative_extra_assumptions(SA) :- kp_not_hold(A), epistemic_map(_, A),  objective_atom_map(SA, A).
-
 
 class GeneratorReification:
     def __init__(
         self,
+        lib: Library,
         config: AppConfig,
         reified_program: Sequence[Symbol],
         preprocessing_facts: Optional[PreprocessingResult] = None,
     ) -> None:
+        self._lib = lib
         self._config = config
-        self.control = clingo.Control(["0"], message_limit=0)
-        cast(clingo.Configuration, self.control.configuration.solve).project = "show,3"
+        self.control = Control(lib, ["0"])
+        self.control.config.solve.project.value = "show,3"
         self.reified_program = reified_program
         self.__initialeze_control(reified_program, preprocessing_facts)
         self.num_candidates = 0
 
     def __initialeze_control(self, reified_program, preprocessing_facts) -> None:
-        with SymbolicBackend(self.control.backend()) as backend:
+        with SymbolicBackend(self.control.backend) as backend:
             for symbol in reified_program:
                 backend.add_rule([symbol])
-        self.control.add("base", [], base_program)
-        self.control.add("base", [], common_opt_program)
-        self.control.add("base", [], fact_optimization_program)
+        program = base_program + common_opt_program + fact_optimization_program
         if self._config.propagate:
-            self.control.add("base", [], propagation_program)
+            program += propagation_program
         if preprocessing_facts is not None:
-            self.control.add("base", [], preprocessing_program)
-            with SymbolicBackend(self.control.backend()) as backend:
+            program += preprocessing_program
+        self.control.parse_string(program)
+        if preprocessing_facts is not None:
+            with SymbolicBackend(self.control.backend) as backend:
                 for atom in preprocessing_facts.lower:
-                    backend.add_rule([Function("cautious", [atom])], [], [])
-        self.control.ground([("base", [])])
+                    backend.add_rule([Function(self._lib, "cautious", [atom])], [], [])
+        self.control.ground()
+        if self._config.propagate:
+            # the externals are made free so that their truth values can be
+            # set with assumptions
+            with SymbolicBackend(self.control.backend) as backend:
+                backend.add_external(
+                    Function(self._lib, "only_proved_candidates"),
+                    ExternalType.Free,
+                )
+                backend.add_external(
+                    Function(self._lib, "only_unproved_candidates"),
+                    ExternalType.Free,
+                )
 
     def __call__(self) -> Iterator[Candidate]:
         if not self._config.propagate:
             yield from self._candidates()
         else:
-            self.control.assign_external(Function("only_proved_candidates"), True)
-            self.control.assign_external(Function("only_unproved_candidates"), False)
-            yield from self._candidates()
-            self.control.assign_external(Function("only_proved_candidates"), False)
-            self.control.assign_external(Function("only_unproved_candidates"), True)
-            yield from self._candidates()
+            # note that with clingo 6 the truth value of externals cannot be
+            # updated once the program has been solved, so assumptions are
+            # used instead
+            only_proved = Function(self._lib, "only_proved_candidates")
+            only_unproved = Function(self._lib, "only_unproved_candidates")
+            yield from self._candidates([(only_proved, True), (only_unproved, False)])
+            yield from self._candidates([(only_proved, False), (only_unproved, True)])
 
-    def _candidates(self) -> Iterator[Candidate]:
-        with cast(clingo.SolveHandle, self.control.solve(yield_=True)) as handle:
+    def _candidates(self, assumptions: Sequence = ()) -> Iterator[Candidate]:
+        with self.control.start_solve(
+            assumptions=list(assumptions), yield_=True
+        ) as handle:
             for model in handle:
-                # print("*" * 50)
-                # # print(model)
-                # print("\n".join(sorted(str(a) for a in model.symbols(atoms=True))))
                 candidate = self._model_to_candidate(model)
                 self.num_candidates += 1
                 yield candidate
 
-    def _model_to_candidate(self, model: clingo.Model) -> Candidate:
+    def _model_to_candidate(self, model: Model) -> Candidate:
         (
             positive_candidate,
             negative_candidate,
@@ -201,7 +185,4 @@ class GeneratorReification:
         extra_assumptions = Assumptions(
             positive_extra_assumptions, negative_extra_assumptions
         )
-        # print()
-
-        # print(extra_assumptions)
         return Candidate(positive_candidate, negative_candidate, extra_assumptions)

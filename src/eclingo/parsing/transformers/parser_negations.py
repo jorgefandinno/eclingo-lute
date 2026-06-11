@@ -2,11 +2,12 @@
 Module to replace strong and default negations by auxiliary atoms.
 """
 
-from copy import copy
-from typing import List, Optional, Set, Tuple
+from typing import Iterable, List, Optional, Set, Tuple
 
 from clingo import ast
-from clingo.ast import Location, Position, Transformer
+from clingo.core import Library
+
+from eclingo.clingox.ast import theory_term_to_literal
 
 from . import ast_reify
 
@@ -15,64 +16,24 @@ from . import ast_reify
 ####################################################################################
 
 
-# Unused class
-class SimplifyStrongNegationsTransformer(Transformer):
-    pass
-
-
-####################################################################################
-
-
-####################################################################################
-
-
-class StrongNegationToAuxiliarTransformer(Transformer):
-    def __init__(self, strong_negation_prefix="sn"):
-        self.strong_negation_prefix = strong_negation_prefix
-        self.replacement = set()
-
-    def visit_UnaryOperation(self, x):
-        assert x.operator_type == ast.UnaryOperator.Minus
-        assert x.argument.ast_type == ast.ASTType.Function
-        x = simplify_strong_negations(x)
-        name = x.argument.name
-
-        location = x.argument.location
-        arguments = x.argument.arguments
-        external = x.argument.external
-
-        aux_name = name
-        atom = ast.Function(location, aux_name, arguments, external)
-
-        return ast.UnaryOperation(location, 0, atom)
-
-
-####################################################################################
-
-
 class StrongNegationReplacement(Set[Tuple[str, int, str]]):
-    location = Location(
-        begin=Position(
-            filename="<replace_strong_negation_by_auxiliary_atoms>", line=1, column=1
-        ),
-        end=Position(
-            filename="<replace_strong_negation_by_auxiliary_atoms>", line=1, column=1
-        ),
-    )
+    pass
 
 
 SnReplacementType = Set[Tuple[str, int, str]]
 
 
-def simplify_strong_negations(stm: ast.AST) -> ast.AST:
+def simplify_strong_negations(stm):
     """
     Removes duplicate occurrences of strong negation and provides
     an equivalent formula.
     """
-    return SimplifyStrongNegationsTransformer().visit(stm)
+    return stm  # pragma: no cover
 
 
-def make_strong_negations_auxiliar(stm: ast.AST) -> Tuple[ast.AST, SnReplacementType]:
+def make_strong_negations_auxiliar(
+    lib: Library, stm
+) -> Tuple[object, SnReplacementType]:
     """
     Replaces strong negation by an auxiliary atom.
     Returns a pair:
@@ -82,67 +43,67 @@ def make_strong_negations_auxiliar(stm: ast.AST) -> Tuple[ast.AST, SnReplacement
       * the second element is its arity
       * the third element is the name of the auxiliary atom that replaces it
     """
-    trn = StrongNegationToAuxiliarTransformer()
-    stm = trn.visit(stm)
-    return (stm, trn.replacement)
+    return (stm, set())
 
 
 ####################################################################################
 
 
-def _make_default_negation_auxiliar(
-    stm: ast.AST, default_negation_prefix="not"
-) -> ast.AST:
-    assert stm.ast_type == ast.ASTType.Literal
-    location = stm.atom.symbol.location
-
-    if stm.sign == ast.Sign.NoSign or stm.atom.ast_type != ast.ASTType.SymbolicAtom:
-        return stm
-
-    aux_atom = ast_reify.symbolic_literal_to_term(stm)
-    aux_atom = ast.SymbolicAtom(aux_atom)
-    new_stm = ast.Literal(location, ast.Sign.NoSign, aux_atom)
-
-    return new_stm
+NotReplacementType = Optional[Tuple[object, object]]
 
 
-NotReplacementType = Optional[Tuple[ast.AST, ast.AST]]
-
-
-def make_default_negation_auxiliar(stm: ast.AST) -> Tuple[ast.AST, NotReplacementType]:
+def make_default_negation_auxiliar(
+    lib: Library, stm
+) -> Tuple[object, NotReplacementType]:
     """
     Replaces default negation by an auxiliary atom.
+
+    The statement is a theory atom element whose unique term encodes a literal
+    as a theory term (see
+    `eclingo.parsing.transformers.ast_reify.literal_to_theory_term`).
+
     Returns a pair:
     - the first element is the result of such replacement
-    - the second element is a set of triples containing information about the replacement:
-      * the first element is the auxiliary literal replacing the negated literal
-      * the second element is the original literal replaced
+    - the second element is a pair containing information about the replacement:
+      * the first element is the original literal replaced
+      * the second element is the auxiliary literal replacing the negated literal
     """
-    assert stm.ast_type == ast.ASTType.TheoryAtomElement
-    assert len(stm.terms) == 1
-    new_stm = copy(stm)
-    lit = new_stm.terms[0]
-    new_lit = _make_default_negation_auxiliar(lit)
-    if new_lit is lit:
-        return (new_stm, None)
-    new_stm.terms[0] = new_lit
-    return (new_stm, (lit, new_lit))
+    assert isinstance(stm, ast.TheoryAtomElement)
+    assert len(stm.tuple) == 1
+    term = stm.tuple[0]
+    sign = ast_reify.theory_term_sign(term)
+
+    if sign == ast.Sign.NoSign:
+        return (stm, None)
+
+    atom_term = ast_reify.theory_term_strip_sign(term)
+    aux_name = "not1" if sign == ast.Sign.Single else "not2"
+    aux_term = ast.TheoryTermFunction(lib, term.location, aux_name, [atom_term])
+
+    new_stm = stm.update(lib, tuple=[aux_term])
+
+    original_literal = theory_term_to_literal(lib, term, False)
+    aux_literal = theory_term_to_literal(lib, aux_term, False)
+
+    return (new_stm, (original_literal, aux_literal))
 
 
 def default_negation_auxiliary_rule(
-    location, aux_literal: ast.AST, original_literal: ast.AST, gard: List[ast.AST]
-) -> ast.AST:
+    lib: Library, location, aux_literal, original_literal, gard: List
+):
     """
     Returns a rule of the form:
         aux_literal :- gard, original_literal
     """
     rule_body = list(gard)
-    rule_body.append(original_literal)
-    return ast.Rule(location, aux_literal, rule_body)
+    rule_body.append(ast.BodySimpleLiteral(lib, original_literal))
+    return ast.StatementRule(
+        lib, location, ast.HeadSimpleLiteral(lib, aux_literal), rule_body
+    )
 
 
 def default_negation_auxiliary_rule_replacement(
-    location, replacement: List[ast.AST], gard: List[ast.AST]
+    lib: Library, location, replacement: Iterable, gard: List
 ):
     """
     Returns a rule of the form:
@@ -151,5 +112,5 @@ def default_negation_auxiliary_rule_replacement(
     """
     for original_literal, aux_literal in replacement:  # type: ignore
         yield default_negation_auxiliary_rule(
-            location, aux_literal, original_literal, gard
+            lib, location, aux_literal, original_literal, gard
         )

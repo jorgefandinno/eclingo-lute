@@ -1,6 +1,10 @@
 """
 If using conda, then be sure to be in the nox environment different from "base" before running this file.
 
+Note that clingo 6 is not available on PyPI, so the sessions run in the
+current environment, which must provide clingo 6 and the development tools
+(coverage, mypy, black, isort, pylint, flake8).
+
 To run all tests: nox -Rs all_tests
 The above also runs coverage.
 The follwing only run a subset of tests and they do not run coverage.
@@ -8,36 +12,34 @@ To run only fast test: nox -Rs tests
 To run only slow test: nox -Rs slow_tests
 """
 import os
+
 import nox
 
 IS_GITHUB = "GITHUB_ACTIONS" in os.environ
 
-@nox.session
+
+@nox.session(python=False)
 def format(session: nox.Session):
-    session.install("black", "isort", external=IS_GITHUB)
-    session.run("isort", "--profile", "black", "src/eclingo", external=IS_GITHUB)
+    session.run("isort", "--profile", "black", "src/eclingo", external=True)
     args = session.posargs if session.posargs else ["src/eclingo", "tests"]
-    session.run("black", *args, external=IS_GITHUB)
+    session.run("black", *args, external=True)
 
 
-@nox.session(python=None)
+@nox.session(python=False)
 def typecheck(session: nox.Session):
-    session.install("mypy", external=IS_GITHUB)
-    session.install("-e", ".", external=IS_GITHUB)
-    session.run("mypy", "--implicit-optional", "src/eclingo", external=IS_GITHUB)
+    session.run("mypy", "--implicit-optional", "src/eclingo", external=True)
 
 
-@nox.session(python=None)
+@nox.session(python=False)
 def all_tests(session: nox.Session):
     session.notify("tests")
     session.notify("slow_tests")
+    session.notify("test_clingox")
     session.notify("coverage")
 
 
-@nox.session(python=None)
+@nox.session(python=False)
 def tests(session: nox.Session):
-    session.install("coverage", external=IS_GITHUB)
-    session.install("-e", ".", external=IS_GITHUB)
     session.run(
         "coverage",
         "run",
@@ -51,7 +53,6 @@ def tests(session: nox.Session):
         "tests/test_reification4.py",
         "tests/test_reification5.py",
         "tests/test_eclingo.py",
-        # "tests/test_grounder.py",
         "tests/test_generator_reification.py",
         "tests/test_literals.py",
         "tests/test_parsing.py",
@@ -65,13 +66,12 @@ def tests(session: nox.Session):
         "tests/test_preprocessor.py",
         "tests/test_propagator.py",
         "-v",
-        external=IS_GITHUB,
+        external=True,
     )
 
-@nox.session(python=None)
+
+@nox.session(python=False)
 def test_clingox(session: nox.Session):
-    session.install("coverage", external=IS_GITHUB)
-    session.install("-e", ".", external=IS_GITHUB)
     session.run(
         "coverage",
         "run",
@@ -81,22 +81,18 @@ def test_clingox(session: nox.Session):
         "unittest",
         "tests/clingox/testing/test_ast.py",
         "tests/clingox/test_ast.py",
-        "tests/clingox/test_pprint.py",
         "tests/clingox/test_reify.py",
         "tests/clingox/test_theory.py",
         "tests/clingox/test_backend.py",
         "tests/clingox/test_program.py",
         "tests/clingox/test_solving.py",
         "-v",
-        external=IS_GITHUB,
+        external=True,
     )
 
 
-@nox.session(python=None)
+@nox.session(python=False)
 def slow_tests(session: nox.Session):
-    session.install("coverage", external=IS_GITHUB)
-    # session.install("-r", "requirements.txt", external=IS_GITHUB)
-    session.install("-e", ".", external=IS_GITHUB)
     session.run(
         "coverage",
         "run",
@@ -107,13 +103,12 @@ def slow_tests(session: nox.Session):
         "tests/test_app.py",
         "tests/test_eclingo_examples.py",
         "-v",
-        external=IS_GITHUB,
+        external=True,
     )
 
 
-@nox.session(python=None)
+@nox.session(python=False)
 def coverage(session: nox.Session):
-    session.install("coverage", external=IS_GITHUB)
     omit = ["src/eclingo/__main__.py", "src/eclingo/__init__.py", "tests/*", "helper_test/*"]
     session.run(
         "coverage",
@@ -121,7 +116,7 @@ def coverage(session: nox.Session):
         ".coverage_fast",
         ".coverage_slow",
         ".coverage_clingox",
-        external=IS_GITHUB,
+        external=True,
     )
     session.run(
         "coverage",
@@ -130,19 +125,15 @@ def coverage(session: nox.Session):
         "--fail-under=99",
         "--omit",
         ",".join(omit),
-        external=IS_GITHUB,
+        external=True,
     )
 
 
-@nox.session
+@nox.session(python=False)
 def pylint(session: nox.Session):
-    session.install("-e", ".", external=IS_GITHUB)
-    session.install("pylint", external=IS_GITHUB)
-    # session.install("-r", "requirements.txt", "pylint", external=IS_GITHUB)
-    session.run("pylint", "src/eclingo", external=IS_GITHUB)
+    session.run("pylint", "src/eclingo", external=True)
 
 
-@nox.session
+@nox.session(python=False)
 def lint_flake8(session: nox.Session):
-    session.install("flake8", "flake8-black", "flake8-isort", external=IS_GITHUB)
-    session.run("flake8", "src/eclingo", external=IS_GITHUB)
+    session.run("flake8", "src/eclingo", external=True)

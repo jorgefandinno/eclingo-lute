@@ -1,15 +1,15 @@
 from dataclasses import dataclass
 from typing import Union
 
-from clingo import Symbol
 from clingo.ast import Sign
+from clingo.symbol import Symbol
 
 
 def sign2str(sign: Sign):
     literal_sign = ""
-    if sign == Sign.Negation:
+    if sign == Sign.Single:
         literal_sign = "not "
-    elif sign == Sign.DoubleNegation:
+    elif sign == Sign.Double:
         literal_sign = "not not "
     return literal_sign
 

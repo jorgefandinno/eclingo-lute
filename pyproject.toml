@@ -4,14 +4,9 @@ version = "1.2.0"
 description = ""
 authors = ["Jorge Fandinno <jfandinno@unomaha.edu>"]
 
-[[tool.poetry.source]]
-name = "test"
-url = "https://test.pypi.org/simple/"
-
 [tool.poetry.dependencies]
-python = "^3.9"
-clingo = "^5.5.2"
-clingox = {version = "^1.2.1", source = "test"}
+python = "^3.10"
+clingo = "^6.0.0"
 
 [tool.poetry.dev-dependencies]
 coverage = {extras = ["toml"], version = "^6.4.1"}

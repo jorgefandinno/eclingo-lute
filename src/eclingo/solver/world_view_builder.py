@@ -1,20 +1,21 @@
-from typing import Optional, Sequence, cast
+from typing import Optional, Sequence
 
-import clingo
-from clingo import Configuration, Function, SolveHandle, Symbol
 from clingo.ast import Sign
+from clingo.control import Control
+from clingo.core import Library
+from clingo.symbol import Function, Symbol
 
 from eclingo.clingox.backend import SymbolicBackend
 from eclingo.literals import Literal
 from eclingo.solver.candidate import Candidate
 
-from .candidate import Candidate
 from .world_view import EpistemicLiteral, WorldView
 
 
 class WorldWiewBuilderReification:
-    def __init__(self):
-        self.control = clingo.Control(["0"], message_limit=0)
+    def __init__(self, lib: Library):
+        self._lib = lib
+        self.control = Control(lib, ["0"])
 
     def __call__(self, candidate: Candidate):
         return self.world_view_from_candidate(candidate)
@@ -29,14 +30,14 @@ class WorldWiewBuilderReification:
         # if symbol is of the form &k{not not L} with L an explicit literal
         elif epistemic_name == "not2":
             literal_symbol = ep_args.arguments[0].arguments[0]
-            sign = Sign.DoubleNegation
+            sign = Sign.Double
         # if symbol is of the form &k{L} with L an explicit literal
         else:
             literal_symbol = ep_args.arguments[0]  # literal symbol is L
             sign = Sign.NoSign
 
         # Check for explicit negation
-        is_explicit = literal_symbol.positive
+        is_explicit = literal_symbol.is_positive
 
         # Check for arguments of literal
         arguments: list[Symbol] = []
@@ -44,7 +45,7 @@ class WorldWiewBuilderReification:
             for args in literal_symbol.arguments:
                 arguments.append(args)
 
-        new_symbol = Function(literal_symbol.name, arguments, is_explicit)
+        new_symbol = Function(self._lib, literal_symbol.name, arguments, is_explicit)
         literal = Literal(new_symbol, sign)
 
         return EpistemicLiteral(literal, Sign.NoSign)
@@ -85,10 +86,10 @@ class WorldWiewBuilderReification:
 
 
 class WorldWiewBuilderReificationWithShow(WorldWiewBuilderReification):
-    def __init__(self, reified_program: Sequence[Symbol]):
-        super().__init__()
-        cast(Configuration, self.control.configuration.solve).models = 0
-        cast(Configuration, self.control.configuration.solve).project = "auto,3"
+    def __init__(self, lib: Library, reified_program: Sequence[Symbol]):
+        super().__init__(lib)
+        self.control.config.solve.models.value = "0"
+        self.control.config.solve.project.value = "auto,3"
         self.reified_program = reified_program
 
         program_meta_encoding = """
@@ -124,11 +125,11 @@ class WorldWiewBuilderReificationWithShow(WorldWiewBuilderReification):
                                 :- hold(L) , not k(A), output(k(A), B), literal_tuple(B, L).
                                 """
 
-        with SymbolicBackend(self.control.backend()) as backend:
+        with SymbolicBackend(self.control.backend) as backend:
             for symbol in reified_program:
                 backend.add_rule([symbol])
-        self.control.add("base", [], program_meta_encoding)
-        self.control.ground([("base", [])])
+        self.control.parse_string(program_meta_encoding)
+        self.control.ground()
 
     def world_view_from_candidate(self, candidate: Candidate):
         candidate_assumptions = []
@@ -143,18 +144,28 @@ class WorldWiewBuilderReificationWithShow(WorldWiewBuilderReification):
             candidate_assumptions.append(assumption)
             # literal = literal.arguments[0]
 
-        cast(Configuration, self.control.configuration.solve).models = 0
-        cast(Configuration, self.control.configuration.solve).project = "no"
-        cast(Configuration, self.control.configuration.solve).enum_mode = "cautious"
+        self.control.config.solve.models.value = "0"
+        self.control.config.solve.project.value = "no"
+        self.control.config.solve.enum_mode.value = "cautious"
 
-        with cast(
-            SolveHandle,
-            self.control.solve(yield_=True, assumptions=candidate_assumptions),
+        # with clingo 6 assumptions over atoms that do not occur in the
+        # program raise an error, while with clingo 5 such atoms were false
+        base = self.control.base
+        candidate_assumptions = [
+            (symbol, value)
+            for symbol, value in candidate_assumptions
+            if symbol in base or value
+        ]
+
+        with self.control.start_solve(
+            assumptions=candidate_assumptions, yield_=True
         ) as handle:
-            model = None
-            for model in handle:
+            for _ in handle:
                 pass
 
+            # note that with clingo 6 models cannot be accessed after
+            # iterating over them, so the last model is retrieved instead
+            model = handle.last()
             assert model is not None
             ret = self.epistemic_show_statements(model)
             if ret is not None:
@@ -167,16 +178,17 @@ class WorldWiewBuilderReificationWithShow(WorldWiewBuilderReification):
     """
 
     def epistemic_show_statements(self, model):
+        lib = self._lib
         candidate_pos = []
         candidate_neg = []
         with_show_statement = False
         for atom in model.symbols(atoms=True):
             if atom.name == "show_statement":
                 with_show_statement = True
-                uatom = Function("u", [atom.arguments[0]])
-                katom = Function("k", [uatom])
-                natom = Function("not1", [uatom])
-                knatom = Function("k", [natom])
+                uatom = Function(lib, "u", [atom.arguments[0]])
+                katom = Function(lib, "k", [uatom])
+                natom = Function(lib, "not1", [uatom])
+                knatom = Function(lib, "k", [natom])
                 if model.contains(uatom):
                     candidate_pos.append(katom)
                 elif not model.contains(natom):

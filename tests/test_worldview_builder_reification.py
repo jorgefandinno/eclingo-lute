@@ -1,8 +1,8 @@
 import unittest
 from typing import Sequence
 
-import clingo
 from clingo.ast import Sign
+from clingo.core import Library
 from clingo.symbol import Function, Symbol
 
 import eclingo as _eclingo
@@ -20,14 +20,11 @@ from tests.parse_programs import parse_program as _parse_reified
 """ Helper function to generate candidates for a given program and test them"""
 
 
-def world_view_builder(tested_candidates):
+def world_view_builder(lib, tested_candidates):
     config = _eclingo.config.AppConfig()
     config.eclingo_semantics = "c19-1"
-    control = clingo.Control(["0"], message_limit=0)
-    control.configuration.solve.models = 0
-    control.configuration.solve.project = "auto,3"
 
-    world_view_builder = WorldWiewBuilderReification()
+    world_view_builder = WorldWiewBuilderReification(lib)
 
     wviews = []
     for candidate in tested_candidates:
@@ -39,6 +36,9 @@ def world_view_builder(tested_candidates):
 
 
 class TestCase(unittest.TestCase):
+    def setUp(self):
+        self.lib = Library(message_limit=0)
+
     maxDiff = None
 
     def assert_models(self, candidates, expected):
@@ -51,37 +51,56 @@ class TestEclingoWViewReification(TestCase):
         # "a. b :- &k{a}."
         self.assert_models(
             world_view_builder(
+                self.lib,
                 [
                     Candidate(
                         pos=[
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("a", [], True)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "a", [], True)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             )
                         ],
                         neg=[],
                     )
-                ]
+                ],
             ),
-            [WorldView([EpistemicLiteral(Function("a", [], True), 0, False)])],
+            [
+                WorldView(
+                    [EpistemicLiteral(Function(self.lib, "a", [], True), 0, False)]
+                )
+            ],
         )
 
     def test_wview_reification2(self):
         # echo "a. b :- &k{ not not a }." | eclingo --output=reify --semantics c19-1 --reification
         self.assert_models(
             world_view_builder(
+                self.lib,
                 [
                     Candidate(
                         pos=[
                             Function(
+                                self.lib,
                                 "k",
                                 [
                                     Function(
+                                        self.lib,
                                         "not2",
                                         [
                                             Function(
-                                                "u", [Function("a", [], True)], True
+                                                self.lib,
+                                                "u",
+                                                [Function(self.lib, "a", [], True)],
+                                                True,
                                             )
                                         ],
                                         True,
@@ -92,13 +111,13 @@ class TestEclingoWViewReification(TestCase):
                         ],
                         neg=[],
                     )
-                ]
+                ],
             ),
             [
                 WorldView(
                     [
                         EpistemicLiteral(
-                            Literal(Function("a", [], True), Sign.DoubleNegation),
+                            Literal(Function(self.lib, "a", [], True), Sign.Double),
                             0,
                             False,
                         )
@@ -111,24 +130,35 @@ class TestEclingoWViewReification(TestCase):
         # echo "-a. b:- &k{-a}. c :- b." | eclingo --semantics c19-1 --reification --output=reify
         self.assert_models(
             world_view_builder(
+                self.lib,
                 [
                     Candidate(
                         pos=[
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("a", [], False)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "a", [], False)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             )
                         ],
                         neg=[],
                     )
-                ]
+                ],
             ),
             [
                 WorldView(
                     [
                         EpistemicLiteral(
-                            Literal(Function("a", [], False), Sign.NoSign), 0, False
+                            Literal(Function(self.lib, "a", [], False), Sign.NoSign),
+                            0,
+                            False,
                         )
                     ]
                 )
@@ -139,29 +169,48 @@ class TestEclingoWViewReification(TestCase):
         # echo "-a. b :- &k{-a}. c :- &k{b}." | eclingo --semantics c19-1 --reification
         self.assert_models(
             world_view_builder(
+                self.lib,
                 [
                     Candidate(
                         pos=[
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("b", [], True)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "b", [], True)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             ),
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("a", [], False)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "a", [], False)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             ),
                         ],
                         neg=[],
                     ),
-                ]
+                ],
             ),
             [
                 WorldView(
                     [
-                        EpistemicLiteral(Function("b", [], True), Sign.NoSign, False),
-                        EpistemicLiteral(Function("a", [], False), 0, False),
+                        EpistemicLiteral(
+                            Function(self.lib, "b", [], True), Sign.NoSign, False
+                        ),
+                        EpistemicLiteral(Function(self.lib, "a", [], False), 0, False),
                     ]
                 )
             ],
@@ -171,37 +220,56 @@ class TestEclingoWViewReification(TestCase):
         # echo "-a. b :- &k{-a}." | eclingo --semantics c19-1 --reification
         self.assert_models(
             world_view_builder(
+                self.lib,
                 [
                     Candidate(
                         pos=[
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("a", [], False)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "a", [], False)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             )
                         ],
                         neg=[],
                     )
-                ]
+                ],
             ),
-            [WorldView([EpistemicLiteral(Function("a", [], False), 0, False)])],
+            [
+                WorldView(
+                    [EpistemicLiteral(Function(self.lib, "a", [], False), 0, False)]
+                )
+            ],
         )
 
     def test_wview_reification6(self):
         # echo "b :- &k{ not a }. c :- &k{ b }." | eclingo --semantics c19-1 --reification
         self.assert_models(
             world_view_builder(
+                self.lib,
                 [
                     Candidate(
                         pos=[
                             Function(
+                                self.lib,
                                 "k",
                                 [
                                     Function(
+                                        self.lib,
                                         "not1",
                                         [
                                             Function(
-                                                "u", [Function("a", [], True)], True
+                                                self.lib,
+                                                "u",
+                                                [Function(self.lib, "a", [], True)],
+                                                True,
                                             )
                                         ],
                                         True,
@@ -209,20 +277,30 @@ class TestEclingoWViewReification(TestCase):
                                 ],
                             ),
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("b", [], True)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "b", [], True)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             ),
                         ],
                         neg=[],
                     )
-                ]
+                ],
             ),
             [
                 WorldView(
                     [
                         EpistemicLiteral(
-                            Literal(Function("b", [], True), Sign.NoSign), 0, False
+                            Literal(Function(self.lib, "b", [], True), Sign.NoSign),
+                            0,
+                            False,
                         ),
                     ]
                 )
@@ -233,18 +311,24 @@ class TestEclingoWViewReification(TestCase):
         # echo "b :- &k{ not a }. c :- &k{ b }. {a}." | eclingo --semantics c19-1 --reification
         self.assert_models(
             world_view_builder(
+                self.lib,
                 [
                     Candidate(
                         pos=[],
                         neg=[
                             Function(
+                                self.lib,
                                 "k",
                                 [
                                     Function(
+                                        self.lib,
                                         "not1",
                                         [
                                             Function(
-                                                "u", [Function("a", [], True)], True
+                                                self.lib,
+                                                "u",
+                                                [Function(self.lib, "a", [], True)],
+                                                True,
                                             )
                                         ],
                                         True,
@@ -252,19 +336,29 @@ class TestEclingoWViewReification(TestCase):
                                 ],
                             ),
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("b", [], True)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "b", [], True)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             ),
                         ],
                     )
-                ]
+                ],
             ),
             [
                 WorldView(
                     [
                         EpistemicLiteral(
-                            Literal(Function("a", [], True), Sign.NoSign), 0, True
+                            Literal(Function(self.lib, "a", [], True), Sign.NoSign),
+                            0,
+                            True,
                         ),
                     ]
                 )
@@ -275,24 +369,38 @@ class TestEclingoWViewReification(TestCase):
         # echo "b :- &k{ not a }. c :- &k{ a }. a." | eclingo --semantics c19-1 --reification
         self.assert_models(
             world_view_builder(
+                self.lib,
                 [
                     Candidate(
                         pos=[
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("a", [], True)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "a", [], True)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             ),
                         ],
                         neg=[
                             Function(
+                                self.lib,
                                 "k",
                                 [
                                     Function(
+                                        self.lib,
                                         "not1",
                                         [
                                             Function(
-                                                "u", [Function("a", [], True)], True
+                                                self.lib,
+                                                "u",
+                                                [Function(self.lib, "a", [], True)],
+                                                True,
                                             )
                                         ],
                                         True,
@@ -301,13 +409,13 @@ class TestEclingoWViewReification(TestCase):
                             ),
                         ],
                     )
-                ]
+                ],
             ),
             [
                 WorldView(
                     [
                         EpistemicLiteral(
-                            Literal(Function("a", [], True), Sign.NoSign),
+                            Literal(Function(self.lib, "a", [], True), Sign.NoSign),
                             0,
                         ),
                     ]
@@ -331,12 +439,16 @@ class TestEclingoWViewReificationWithShow(TestCase):
         # This exercises world_view_builder.py line 183: the elif branch where
         # show_statement(a) is present but u(a) is not in the cautious model
         # (true in some answer sets but not all) and not1(u(a)) is also absent.
-        reified = _parse_reified(_PRG_OPTIONAL_A_WITH_SHOW)
-        builder = WorldWiewBuilderReificationWithShow(reified)
+        reified = _parse_reified(self.lib, _PRG_OPTIONAL_A_WITH_SHOW)
+        builder = WorldWiewBuilderReificationWithShow(self.lib, reified)
         wv = builder(Candidate(pos=[], neg=[]))
         self.assertEqual(
             wv,
             WorldView(
-                [EpistemicLiteral(Function("a", [], True), Sign.NoSign, is_m=True)]
+                [
+                    EpistemicLiteral(
+                        Function(self.lib, "a", [], True), Sign.NoSign, is_m=True
+                    )
+                ]
             ),
         )

@@ -1,11 +1,12 @@
 import sys
 import time
 from collections import namedtuple
-from typing import Optional, Sequence, cast
+from typing import List, Optional, Sequence, Tuple
 
-import clingo
-from clingo import Function, Symbol
-from clingo.control import Configuration
+from clingo.control import Control
+from clingo.core import Library
+from clingo.propagate import Assignment, PropagateInit, Propagator
+from clingo.symbol import Function, Symbol
 
 from eclingo.clingox.backend import SymbolicBackend
 from eclingo.config import AppConfig
@@ -13,20 +14,49 @@ from eclingo.config import AppConfig
 from .candidate import Candidate
 
 
+class _RootLevelCollector(Propagator):
+    """
+    Propagator collecting the top-level truth values of all program atoms.
+
+    With clingo 5, this information was obtained from the symbolic atoms after
+    calling `Control.cleanup`, which no longer exists in clingo 6.
+    """
+
+    lower: List[Symbol]
+    upper: List[Symbol]
+
+    def __init__(self):
+        super().__init__()
+        self.lower = []
+        self.upper = []
+
+    def init(self, assignment: Assignment, init: PropagateInit) -> None:
+        self.lower = []
+        self.upper = []
+        for atom_base in init.base.values():
+            for atom in atom_base.values():
+                value = assignment.value(init.solver_literal(atom.literal))
+                if value is not False:
+                    self.upper.append(atom.symbol)
+                if value is True:
+                    self.lower.append(atom.symbol)
+
+
 def _approximate(
-    ctl: clingo.Control,
-) -> Optional[tuple[Sequence[Symbol], Sequence[Symbol]]]:
+    control: Control, collector: _RootLevelCollector
+) -> Optional[Tuple[Sequence[Symbol], Sequence[Symbol]]]:
     """
     Approximate the stable models of a program.
 
     Parameters
     ----------
-    ctl
+    control
         A control object with a program. Grounding should be performed on this
-        control object before calling this function.
+        control object before calling this function. The given collector must
+        have been registered as a propagator of the control object.
 
     the following must be set before calling this function.
-    ctl.configuration.solve.solve_limit = 0
+    control.config.solve.solve_limit.value = "0"
 
     Returns
     -------
@@ -41,21 +71,14 @@ def _approximate(
     Runs in polynomial time. An approximation might be returned even if the
     problem is unsatisfiable.
     """
-    ctl.solve()
-    ctl.cleanup()
+    result = control.solve()
 
     # check if the problem is conflicting
-    if ctl.is_conflicting:
+    if result.unsatisfiable:
         return None
 
     # return approximation
-    lower = []
-    upper = []
-    for sa in ctl.symbolic_atoms:
-        upper.append(sa.symbol)
-        if sa.is_fact:
-            lower.append(sa.symbol)
-    return lower, upper
+    return collector.lower, collector.upper
 
 
 PreprocessingResult = namedtuple(
@@ -120,13 +143,15 @@ preprocessing_hold(KA) :- epistemic_atom_map(k(SA), KA), hold_symbolic_atom(SA).
 
 
 class CandidateTesterReification:
-    def __init__(self, config: AppConfig, reified_program: Sequence[Symbol]):
+    def __init__(
+        self, lib: Library, config: AppConfig, reified_program: Sequence[Symbol]
+    ):
         self.num_solve_calls = 0
+        self._lib = lib
         self._config = config
-        self.control = clingo.Control(["0"], message_limit=0)
+        self.control = Control(lib, ["0"])
         self.reified_program = reified_program
-        assert isinstance(self.control.configuration.solve, Configuration)
-        self.control.configuration.solve.enum_mode = "cautious"
+        self.control.config.solve.enum_mode.value = "cautious"
 
         self.initialized_control = False
         self.grounding_time = 0
@@ -135,14 +160,16 @@ class CandidateTesterReification:
         self.objective_atoms: frozenset[Symbol] = frozenset()
         self.epistemic_atoms: frozenset[Symbol] = frozenset()
         self._epistemic_atoms_int: set[Symbol] = set()
+        self._collector = _RootLevelCollector()
 
     def _initialize_control(self):
         start_time = time.time()
-        with SymbolicBackend(self.control.backend()) as backend:
+        with SymbolicBackend(self.control.backend) as backend:
             for symbol in self.reified_program:
                 backend.add_rule([symbol])
-        self.control.add("base", [], program_meta_encoding)
-        self.control.ground([("base", [])])
+        self.control.parse_string(program_meta_encoding)
+        self.control.ground()
+        self.control.register_propagator(self._collector)
         self.initialized_control = True
         self.grounding_time += time.time() - start_time
 
@@ -171,40 +198,45 @@ class CandidateTesterReification:
             assumption = (literal, False)
             candidate_assumptions.append(assumption)
 
-        assert isinstance(self.control.configuration.solve, Configuration)
-        self.control.configuration.solve.models = 0
-        self.control.configuration.solve.project = "no"
+        self.control.config.solve.models.value = "0"
+        self.control.config.solve.project.value = "no"
 
         if not self.initialized_control:
             self._initialize_control()
 
-        with cast(
-            clingo.SolveHandle,
-            self.control.solve(yield_=True, assumptions=candidate_assumptions),
+        # with clingo 6 assumptions over atoms that do not occur in the
+        # program raise an error, while with clingo 5 such atoms were false
+        base = self.control.base
+        filtered_assumptions = []
+        for symbol, value in candidate_assumptions:
+            if symbol in base:
+                filtered_assumptions.append((symbol, value))
+            elif value:
+                # a true assumption over a false atom is unsatisfiable
+                return False
+        candidate_assumptions = filtered_assumptions
+
+        with self.control.start_solve(
+            assumptions=candidate_assumptions, yield_=True
         ) as handle:
-            model = None
             for model in handle:
                 self.num_solve_calls += 1
                 for atom in candidate_pos:
                     if not model.contains(atom):
                         return False
 
-            assert model is not None, str(candidate)
+            # note that with clingo 6 models cannot be accessed after
+            # iterating over them, so the last model is retrieved instead
+            last_model = handle.last()
+            assert last_model is not None, str(candidate)
 
             for atom in candidate_neg:
-                if model.contains(atom):
+                if last_model.contains(atom):
                     return False
         return True
 
-    # def basic_preprocessing(self) -> PreprocessingResult:
-    #     solve_limit = self.control.configuration.solve.solve_limit
-    #     self.control.configuration.solve.solve_limit = 0
-    #     ret = self._basic_preprocessing()
-    #     self.control.configuration.solve.solve_limit = solve_limit
-    #     return ret
-
     def _basic_preprocessing(self) -> PreprocessingResult:
-        ret = _approximate(self.control)
+        ret = _approximate(self.control, self._collector)
         if ret is None:
             return PreprocessingResult(unsatisfiable=True, lower=[], upper=[])
         lower_all, upper_all = ret
@@ -218,7 +250,6 @@ class CandidateTesterReification:
         self._epistemic_atoms_int = set(
             e.arguments[0] for e in upper_all if e.name == "epistemic_atom_int"
         )
-        # print(f"\n\nupper_all: {' '.join(sorted(str(a) for a in upper_all if a.name=='atom_map'))}")
         return PreprocessingResult(unsatisfiable=False, lower=lower, upper=upper)
 
     def _prepreocessing_atoms(self, lower, upper):
@@ -241,10 +272,8 @@ class CandidateTesterReification:
         return PreprocessingResult(unsatisfiable, lower, upper)
 
     def _fast_preprocessing(self) -> PreprocessingResult:
-        # print("*" * 50)
-        assert isinstance(self.control.configuration.solve, Configuration)
-        solve_limit = self.control.configuration.solve.solve_limit
-        self.control.configuration.solve.solve_limit = 0
+        solve_limit = self.control.config.solve.solve_limit.value
+        self.control.config.solve.solve_limit.value = "0"
 
         basic_preprocessing_info = self._basic_preprocessing()
         if basic_preprocessing_info.unsatisfiable:
@@ -254,18 +283,14 @@ class CandidateTesterReification:
                 basic_preprocessing_info.lower, basic_preprocessing_info.upper
             )
 
-        self.control.configuration.solve.solve_limit = solve_limit
+        self.control.config.solve.solve_limit.value = solve_limit
         return ret
 
     def _fast_preprocessing_loop(self, lower, upper) -> PreprocessingResult:
         lower_size, upper_size = len(lower), len(upper)
         prev_lower: frozenset[Symbol] = frozenset()
         lower_prev_size, upper_prev_size = 0, sys.maxsize
-        # print(f"{lower_prev_size} {lower_size} {upper_prev_size} {upper_size}")
         while lower_prev_size < lower_size or upper_prev_size > upper_size:
-            # print("*" * 50)
-            # print(f"lower: {lower}")
-            # print(f"upper: {upper}")
             new_rules = []
             if lower_prev_size < lower_size:
                 new_rules.extend(self._fast_preprocessing_lower(lower, prev_lower))
@@ -274,11 +299,11 @@ class CandidateTesterReification:
             if upper_prev_size > upper_size:
                 new_rules.extend(self._fast_preprocessing_upper(upper))
 
-            with SymbolicBackend(self.control.backend()) as symbolic_backend:
+            with SymbolicBackend(self.control.backend) as symbolic_backend:
                 for rule in new_rules:
                     symbolic_backend.add_rule(*rule)
 
-            ret = _approximate(self.control)
+            ret = _approximate(self.control, self._collector)
             if ret is None:
                 break
             lower_all, upper_all = ret
@@ -295,12 +320,12 @@ class CandidateTesterReification:
     def _fast_preprocessing_lower(self, lower, prev_lower):
         lower_diff = lower.difference(prev_lower)
         for atom in lower_diff:
-            yield ([], [], [Function("hold", [atom])])
+            yield ([], [], [Function(self._lib, "hold", [atom])])
 
     def _fast_preprocessing_upper(self, upper):
         remove_from_epistemic_atoms_int = []
         for atom in self._epistemic_atoms_int:
             if atom not in upper:
                 remove_from_epistemic_atoms_int.append(atom)
-                yield ([], [Function("hold", [atom])], [])
+                yield ([], [Function(self._lib, "hold", [atom])], [])
         self._epistemic_atoms_int.difference_update(remove_from_epistemic_atoms_int)

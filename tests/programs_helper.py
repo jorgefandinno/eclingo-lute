@@ -1,6 +1,6 @@
 from typing import List, NamedTuple, Optional
 
-from clingo import Symbol
+from clingo.symbol import Symbol
 
 from eclingo.solver.candidate import Candidate
 

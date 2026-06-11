@@ -1,6 +1,8 @@
 from unittest import TestCase
 
-import clingo
+from clingo.control import Control as ClingoControl
+from clingo.core import Library
+
 from eclingo.clingox.testing.ast import ASTTestCase
 
 from eclingo import util
@@ -11,10 +13,13 @@ from eclingo.control import Control
 
 
 class TestCase(ASTTestCase):
+    def setUp(self):
+        self.lib = Library(message_limit=0)
+
     def assert_equal_program_rewritten(self, program, expected):
-        control = clingo.Control(message_limit=0)
+        control = ClingoControl(self.lib)
         config = AppConfig(eclingo_rewritten="rewritten")
-        eclingo_control = Control(control, config)
+        eclingo_control = Control(self.lib, control, config)
         eclingo_control.add_program(program)
 
         parsed_prg = []

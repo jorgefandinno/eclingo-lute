@@ -1,8 +1,9 @@
 import os
 import unittest
 
-import clingo
-from clingo import Number
+from clingo.control import Control as ClingoControl
+from clingo.core import Library
+from clingo.symbol import Number
 
 import eclingo as _eclingo
 from eclingo.control import Control
@@ -22,13 +23,16 @@ OUTPUT_YALE_PATH = "yale/output/"
 
 
 class TestExamples(unittest.TestCase):
+    def setUp(self):
+        self.lib = Library(message_limit=0)
+
     def test_prog_g94(self):
         for i in range(1, 11):
-            control = clingo.Control()
+            control = ClingoControl(self.lib)
             config = _eclingo.config.AppConfig()
-            control.configuration.solve.models = 0
-            control.configuration.solve.project = "auto,3"
-            eclingo_control = Control(control=control, config=config)
+            control.config.solve.models.value = "0"
+            control.config.solve.project.value = "auto,3"
+            eclingo_control = Control(self.lib, control=control, config=config)
             path = os.path.dirname(os.path.realpath(__file__))
             input_path = os.path.join(path, INPUT_PROG_PATH)
             input_path = os.path.join(input_path, f"prog{i:02d}.lp")
@@ -50,9 +54,9 @@ class TestExamples(unittest.TestCase):
 
     def test_eligible_g94(self):
         for i in range(1, 17):
-            control = clingo.Control()
-            control.configuration.solve.models = 0
-            eclingo_control = Control(control=control)
+            control = ClingoControl(self.lib)
+            control.config.solve.models.value = "0"
+            eclingo_control = Control(self.lib, control=control)
             # eclingo_control.config.eclingo_verbose = 2
             path = os.path.dirname(os.path.realpath(__file__))
             elegible_path = os.path.join(path, KB_ELIGIBLE_PATH)
@@ -79,13 +83,13 @@ class TestExamples(unittest.TestCase):
     def test_yale_g94(self):
         for i in range(1, 9):
             if i != 6:
-                control = clingo.Control(message_limit=0)
+                control = ClingoControl(self.lib)
                 config = _eclingo.config.AppConfig()
                 config.eclingo_semantics = "g94"
-                control.configuration.solve.project = "auto,3"
-                control.configuration.solve.models = 0
+                control.config.solve.project.value = "auto,3"
+                control.config.solve.models.value = "0"
 
-                eclingo_control = Control(control=control, config=config)
+                eclingo_control = Control(self.lib, control=control, config=config)
                 # eclingo_control.config.eclingo_verbose = 10
 
                 path = os.path.dirname(os.path.realpath(__file__))
@@ -98,7 +102,7 @@ class TestExamples(unittest.TestCase):
                 eclingo_control.load(input_path)
                 parts = []
                 parts.append(("base", []))
-                parts.append(("base", [Number(i)]))
+                parts.append(("base", [Number(self.lib, i)]))
                 eclingo_control.ground(parts)
 
                 result = [

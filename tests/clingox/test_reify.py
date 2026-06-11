@@ -1,18 +1,18 @@
 """
 Test cases for the reify module.
+
+The expected reified outputs below follow the format of `clingo --output=reify`
+of clingo 5. The outputs of simple examples have been checked to be identical
+to the ones produced by clingox with clingo 5.8; for the larger examples the
+outputs agree up to the renumbering of program atoms and theory terms.
 """
 
-import os
-from multiprocessing import Process
-from tempfile import NamedTemporaryFile
-from typing import Any, Callable, Dict, Set, Union, cast
+from typing import Callable, Dict, List, Set
 from unittest import TestCase
 
-from clingo.application import Application, clingo_main
-from clingo.control import Control
+from clingo.base import TheoryTermType
+from clingo.core import Library
 from clingo.symbol import Function, Number, Symbol
-from clingo.symbolic_atoms import SymbolicAtom
-from clingo.theory_atoms import TheoryTermType
 
 from eclingo.clingox.reify import (
     ReifiedTheory,
@@ -42,78 +42,7 @@ THEORY = """
 """
 
 
-class _Application(Application):
-    def __init__(self, main):
-        self._main = main
-
-    def main(self, control, files):
-        self._main(control)  # nocoverage
-
-
-class _AppMain:
-    def __init__(self, prg: str):
-        self._prg = prg
-
-    def __call__(self, ctl: Control):
-        ctl.add("base", [], self._prg)  # nocoverage
-        ctl.ground([("base", [])])  # nocoverage
-        ctl.solve()  # nocoverage
-
-
-def _reify(prg, calculate_sccs: bool = False, reify_steps: bool = False):
-    if isinstance(prg, str):
-        symbols = reify_program(prg, calculate_sccs, reify_steps)
-    else:
-        ctl = Control()
-        symbols = []
-        reifier = Reifier(symbols.append, calculate_sccs, reify_steps)
-        ctl.register_observer(reifier)
-        prg(ctl)
-
-    return [str(sym) for sym in symbols]
-
-
-def _reify_check(
-    prg: Union[str, Callable[[Control], None]],
-    calculate_sccs: bool = False,
-    reify_steps: bool = False,
-):
-    with NamedTemporaryFile(delete=False) as temp_out:
-        name_out = temp_out.name
-
-    try:
-        fd_stdout = os.dup(1)
-        fd_out = os.open(name_out, os.O_WRONLY)
-        os.dup2(fd_out, 1)
-        os.close(fd_out)
-
-        args = ["--output=reify", "-Wnone"]
-        if calculate_sccs:
-            args.append("--reify-sccs")
-        if reify_steps:
-            args.append("--reify-steps")
-
-        if isinstance(prg, str):
-            app_main = _AppMain(prg)
-        else:
-            app_main = cast(Any, prg)
-
-        proc = Process(target=clingo_main, args=(_Application(app_main), args))
-        proc.start()
-        proc.join()
-
-        os.fsync(1)
-        os.dup2(fd_stdout, 1)
-        os.close(fd_stdout)
-
-        with open(name_out, encoding="utf8") as file_out:
-            return [s.rstrip(".\n") for s in file_out]
-
-    finally:
-        os.unlink(name_out)
-
-
-def term_symbols(term: ReifiedTheoryTerm, ret: Dict[int, Symbol]) -> None:
+def term_symbols(lib: Library, term: ReifiedTheoryTerm, ret: Dict[int, Symbol]) -> None:
     """
     Represent arguments to theory operators using clingo's
     `clingo.symbol.Symbol` class.
@@ -126,10 +55,10 @@ def term_symbols(term: ReifiedTheoryTerm, ret: Dict[int, Symbol]) -> None:
         and is_operator(term.name)
         and not is_clingo_operator(term.name)
     ):
-        term_symbols(term.arguments[0], ret)
-        term_symbols(term.arguments[1], ret)
+        term_symbols(lib, term.arguments[0], ret)
+        term_symbols(lib, term.arguments[1], ret)
     elif term.index not in ret:
-        ret[term.index] = evaluate(term)
+        ret[term.index] = evaluate(lib, term)
 
 
 def visit_terms(thy: ReifiedTheory, cb: Callable[[ReifiedTheoryTerm], None]):
@@ -148,77 +77,279 @@ def visit_terms(thy: ReifiedTheory, cb: Callable[[ReifiedTheoryTerm], None]):
             cb(guard[1])
 
 
-def _assume(ctl: Control):
-    ctl.add("base", [], "{a;b}.")
-    ctl.ground([("base", [])])
-
-    lit_a = cast(SymbolicAtom, ctl.symbolic_atoms[Function("a")]).literal
-    lit_b = cast(SymbolicAtom, ctl.symbolic_atoms[Function("b")]).literal
-    ctl.solve(assumptions=[lit_a, lit_b])
-    ctl.solve(assumptions=[-lit_a, -lit_b])
-
-
-def _incremental(ctl: Control):
-    ctl.add("step0", [], "a :- b. b :- a. {a;b}.")
-    ctl.ground([("step0", [])])
-    ctl.solve()
-    ctl.add("step1", [], "c :- d. d :- c. {c;d}.")
-    ctl.ground([("step1", [])])
-    ctl.solve()
-
-
 class TestReifier(TestCase):
     """
     Tests for the Reifier.
     """
 
-    def test_incremental(self):
-        """
-        Test incremental reification.
-        """
+    lib: Library
 
-        # Note: we use sets here because the reification of sccs does not
-        # exactly follow what clingo does. In priniciple, it would be possible
-        # to implement this in the same fashion clingo does.
-        self.assertSetEqual(
-            set(_reify(_incremental, True, True)),
-            set(_reify_check(_incremental, True, True)),
+    def setUp(self):
+        self.lib = Library(message_limit=0)
+
+    def reify(self, prg: str, calculate_sccs: bool = False, reify_steps: bool = False):
+        """
+        Reify the given program returning the reified facts as strings.
+        """
+        return [
+            str(sym)
+            for sym in reify_program(self.lib, prg, calculate_sccs, reify_steps)
+        ]
+
+    def test_reify_simple(self):
+        """
+        Test reification of a simple program.
+
+        The expected output is identical to the one of clingox with clingo 5.8.
+        """
+        self.assertListEqual(
+            self.reify("b :- a. {a}."),
+            [
+                "tag(incremental)",
+                "atom_tuple(0)",
+                "atom_tuple(0,1)",
+                "literal_tuple(0)",
+                "rule(choice(0),normal(0))",
+                "atom_tuple(1)",
+                "atom_tuple(1,2)",
+                "literal_tuple(1)",
+                "literal_tuple(1,1)",
+                "rule(disjunction(1),normal(1))",
+                "output(a,1)",
+                "literal_tuple(2)",
+                "literal_tuple(2,2)",
+                "output(b,2)",
+            ],
         )
 
-    def test_reify(self):
+    def test_reify_theory_atom(self):
         """
-        Test reification of different language elements.
-        """
+        Test reification of a simple theory atom.
 
-        prgs = [
-            _assume,
-            GRAMMAR + "&tel { a <? b: x}. { x }.",
-            GRAMMAR + '&tel { a("s") <? b({2,3}) }.',
-            GRAMMAR + "&tel { a <? b([2,c(1)]) }.",
-            GRAMMAR + "&tel { a(s) <? b((2,3)) }.",
-            GRAMMAR + "&tel2 { a <? b } = c.",
-            "a :- b. b :- a. c :- d. {a; d}.",
-            "{ a(1); a(2) } 2. :- a(1..2).",
-            ":- not b. {b}.",
-            "{ a(1..4) }. :- #count{ X: a(X) } > 2.",
-            "a(1..2). #show b(X): a(X).",
-            "1{ a(1..2) }. #minimize { X@2: a(X) }.",
-            "{ a(1..2)}. #show c: a(_). #show.",
-            "#external a. [true]",
-            "#external a. [false]",
-            "#external a. [free]",
-            "#heuristic a. [1,true] {a}.",
-            "#project c: a. { a; b; c }. #project b: a.",
-            "#edge (a,b): c. {c}.",
-        ]
-        for prg in prgs:
-            self.assertListEqual(_reify(prg), _reify_check(prg))
-            self.assertListEqual(
-                _reify(prg, reify_steps=True), _reify_check(prg, reify_steps=True)
-            )
-            self.assertListEqual(
-                _reify(prg, calculate_sccs=True), _reify_check(prg, calculate_sccs=True)
-            )
+        The expected output is identical to the one of clingox with clingo 5.8.
+        """
+        self.assertListEqual(
+            self.reify("#theory theory { t { }; &p/0 : t, any }. &p { t }."),
+            [
+                "tag(incremental)",
+                "atom_tuple(0)",
+                "atom_tuple(0,1)",
+                "literal_tuple(0)",
+                "rule(disjunction(0),normal(0))",
+                'theory_string(0,"p")',
+                'theory_string(1,"t")',
+                "theory_tuple(0)",
+                "theory_tuple(0,0,1)",
+                "theory_element(0,0,0)",
+                "theory_element_tuple(0)",
+                "theory_element_tuple(0,0)",
+                "theory_atom(1,0,0)",
+            ],
+        )
+
+    def test_reify_negative_literal(self):
+        """
+        Test reification of rules with negative literals.
+        """
+        self.assertListEqual(
+            self.reify(":- not b. {b}."),
+            [
+                "tag(incremental)",
+                "atom_tuple(0)",
+                "literal_tuple(0)",
+                "literal_tuple(0,-1)",
+                "rule(disjunction(0),normal(0))",
+                "atom_tuple(1)",
+                "atom_tuple(1,1)",
+                "literal_tuple(1)",
+                "rule(choice(1),normal(1))",
+                "literal_tuple(2)",
+                "literal_tuple(2,1)",
+                "output(b,2)",
+            ],
+        )
+
+    def test_reify_show_term(self):
+        """
+        Test reification of show statements.
+        """
+        self.assertListEqual(
+            self.reify("a(1..2). #show b(X): a(X)."),
+            [
+                "tag(incremental)",
+                "atom_tuple(0)",
+                "atom_tuple(0,1)",
+                "literal_tuple(0)",
+                "rule(disjunction(0),normal(0))",
+                "output(a(1),0)",
+                "output(a(2),0)",
+                "output(b(1),0)",
+                "output(b(2),0)",
+            ],
+        )
+
+    def test_reify_minimize(self):
+        """
+        Test reification of minimize statements.
+        """
+        result = self.reify("1{ a(1..2) }. #minimize { X@2: a(X) }.")
+        self.assertIn("weighted_literal_tuple(0)", result)
+        self.assertIn("weighted_literal_tuple(0,3,1)", result)
+        self.assertIn("weighted_literal_tuple(0,4,2)", result)
+        self.assertIn("minimize(2,0)", result)
+
+    def test_reify_external(self):
+        """
+        Test reification of external statements.
+        """
+        self.assertListEqual(
+            self.reify("#external a. [free]"),
+            [
+                "tag(incremental)",
+                "external(1,free)",
+                "literal_tuple(0)",
+                "literal_tuple(0,1)",
+                "output(a,0)",
+            ],
+        )
+        self.assertIn("external(1,true)", self.reify("#external a. [true]"))
+        self.assertIn("external(1,false)", self.reify("#external a. [false]"))
+
+    def test_reify_heuristic(self):
+        """
+        Test reification of heuristic statements.
+        """
+        self.assertIn(
+            "heuristic(1,true,1,0,0)", self.reify("#heuristic a. [1,true] {a}.")
+        )
+
+    def test_reify_edge(self):
+        """
+        Test reification of edge statements.
+        """
+        result = self.reify("#edge (a,b): c. {c}.")
+        self.assertIn("edge(0,1,1)", result)
+        self.assertIn("literal_tuple(1,1)", result)
+
+    def test_reify_theory_guard(self):
+        """
+        Test reification of theory atoms with guards.
+        """
+        self.assertListEqual(
+            self.reify(GRAMMAR + "&tel2 { a <? b } = c."),
+            [
+                "tag(incremental)",
+                "atom_tuple(0)",
+                "atom_tuple(0,1)",
+                "literal_tuple(0)",
+                "rule(disjunction(0),normal(0))",
+                'theory_string(0,"tel2")',
+                'theory_string(1,"a")',
+                'theory_string(2,"b")',
+                'theory_string(3,"<?")',
+                "theory_tuple(0)",
+                "theory_tuple(0,0,1)",
+                "theory_tuple(0,1,2)",
+                "theory_function(4,3,0)",
+                "theory_tuple(1)",
+                "theory_tuple(1,0,4)",
+                "theory_element(0,1,0)",
+                "theory_element_tuple(0)",
+                "theory_element_tuple(0,0)",
+                'theory_string(5,"=")',
+                'theory_string(6,"c")',
+                "theory_atom(1,0,0,5,6)",
+            ],
+        )
+
+    def test_reify_theory_sequence(self):
+        """
+        Test reification of theory atoms with tuples and functions.
+        """
+        self.assertListEqual(
+            self.reify(GRAMMAR + "&tel { a(s) <? b((2,3)) }."),
+            [
+                "tag(incremental)",
+                "atom_tuple(0)",
+                "atom_tuple(0,1)",
+                "literal_tuple(0)",
+                "rule(disjunction(0),normal(0))",
+                'theory_string(0,"tel")',
+                'theory_string(1,"s")',
+                'theory_string(2,"a")',
+                "theory_tuple(0)",
+                "theory_tuple(0,0,1)",
+                "theory_function(3,2,0)",
+                "theory_number(4,2)",
+                "theory_number(5,3)",
+                "theory_tuple(1)",
+                "theory_tuple(1,0,4)",
+                "theory_tuple(1,1,5)",
+                "theory_sequence(6,tuple,1)",
+                'theory_string(7,"b")',
+                "theory_tuple(2)",
+                "theory_tuple(2,0,6)",
+                "theory_function(8,7,2)",
+                'theory_string(9,"<?")',
+                "theory_tuple(3)",
+                "theory_tuple(3,0,3)",
+                "theory_tuple(3,1,8)",
+                "theory_function(10,9,3)",
+                "theory_tuple(4)",
+                "theory_tuple(4,0,10)",
+                "theory_element(0,4,0)",
+                "theory_element_tuple(0)",
+                "theory_element_tuple(0,0)",
+                "theory_atom(1,0,0)",
+            ],
+        )
+
+    def test_reify_sccs(self):
+        """
+        Test reification with SCC calculation.
+        """
+        result = self.reify("a :- b. b :- a. c :- d. {a; d}.", calculate_sccs=True)
+        self.assertIn("scc(0,1)", result)
+        self.assertIn("scc(0,3)", result)
+        self.assertEqual(2, sum(1 for s in result if s.startswith("scc")))
+
+    def test_reify_steps(self):
+        """
+        Test reification with step numbers.
+        """
+        self.assertListEqual(
+            self.reify("{a}. b :- a.", reify_steps=True),
+            [
+                "tag(incremental)",
+                "atom_tuple(0,0)",
+                "atom_tuple(0,1,0)",
+                "literal_tuple(0,0)",
+                "rule(choice(0),normal(0),0)",
+                "atom_tuple(1,0)",
+                "atom_tuple(1,2,0)",
+                "literal_tuple(1,0)",
+                "literal_tuple(1,1,0)",
+                "rule(disjunction(1),normal(1),0)",
+                "output(a,1,0)",
+                "literal_tuple(2,0)",
+                "literal_tuple(2,2,0)",
+                "output(b,2,0)",
+            ],
+        )
+
+    def test_reifier_callback(self):
+        """
+        Test using the Reifier class directly with a callback.
+        """
+        from clingo.control import Control
+
+        ctl = Control(self.lib)
+        symbols: List[Symbol] = []
+        reifier = Reifier(self.lib, symbols.append)
+        ctl.parse_string("{a}.")
+        ctl.ground()
+        ctl.observe(reifier, preprocess=False)
+        self.assertIn("rule(choice(0),normal(0))", [str(s) for s in symbols])
 
     def test_theory(self):
         """
@@ -226,7 +357,7 @@ class TestReifier(TestCase):
         """
 
         def get_theory(prg):
-            symbols = reify_program(prg)
+            symbols = reify_program(self.lib, prg)
             thy = ReifiedTheory(symbols)
             return list(thy)
 
@@ -242,12 +373,15 @@ class TestReifier(TestCase):
         self.assertEqual(str(atm5), "&a")
 
         self.assertEqual(
-            evaluate(atm1.elements[0].terms[0]), Function("f", [Number(-1)])
+            evaluate(self.lib, atm1.elements[0].terms[0]),
+            Function(self.lib, "f", [Number(self.lib, -1)]),
         )
         self.assertGreaterEqual(atm1.literal, 1)
 
+        # Note: with clingo 5 directives were associated with atom 0, with
+        # clingo 6 they get a regular program atom.
         dir1 = get_theory(THEORY + "&b.")[0]
-        self.assertEqual(dir1.literal, 0)
+        self.assertGreaterEqual(dir1.literal, 1)
 
         atms = get_theory(THEORY + "&a { 1 }. &a { 2 }. &a { 3 }.")
         self.assertEqual(len(set(atms)), 3)
@@ -277,7 +411,8 @@ class TestReifier(TestCase):
         def theory_symbols(prg: str) -> Set[str]:
             ret: Dict[int, Symbol] = {}
             visit_terms(
-                ReifiedTheory(reify_program(prg)), lambda term: term_symbols(term, ret)
+                ReifiedTheory(reify_program(self.lib, prg)),
+                lambda term: term_symbols(self.lib, term, ret),
             )
             return set(str(x) for x in ret.values())
 

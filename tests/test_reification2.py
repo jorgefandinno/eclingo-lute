@@ -1,17 +1,17 @@
 # To be merged with test_reification.py later
 # Let us keep it as a separated file until finishing with the current patch
 
-from typing import cast
-
 from clingo import ast
-from clingo.ast import AST
+from clingo.core import Library
 
 from eclingo.parsing.transformers import ast_reify
 
 from .ast_tester import ASTTestCase
 
+_lib = Library(message_limit=0)
 
-def last_stm(s: str) -> AST:
+
+def last_stm(s: str):
     """
     Convert string to rule.
     """
@@ -21,19 +21,22 @@ def last_stm(s: str) -> AST:
         nonlocal stm
         stm = x
 
-    ast.parse_string(s, set_stm)
+    ast.parse_string(_lib, s, set_stm)
 
-    return cast(AST, stm)
+    return stm
 
 
-def parse_literal(s: str) -> AST:
+def parse_literal(s: str):
     stm = last_stm(f":-{s}.")
-    return stm.body[0]
+    lit = stm.body[0]
+    if isinstance(lit, ast.BodySimpleLiteral):
+        return lit.literal
+    return lit
 
 
-def parse_term(s: str) -> AST:
+def parse_term(s: str):
     lit = parse_literal(f"p({s})")
-    return lit.atom.symbol.arguments[0]
+    return lit.atom.pool[0].arguments[0]
 
 
 if "unittest.util" in __import__("sys").modules:
@@ -45,7 +48,7 @@ class Test(ASTTestCase):
     def assert_symbolic_literal_to_term(self, lit: str, term: str):
         parsed_lit = parse_literal(lit)
         parsed_term = parse_term(term)
-        result = ast_reify.symbolic_literal_to_term(parsed_lit)
+        result = ast_reify.symbolic_literal_to_term(_lib, parsed_lit)
         self.maxDiff = None
         self.assertEqual(result, parsed_term)
 
@@ -86,14 +89,14 @@ class Test(ASTTestCase):
 
     def test_theory_atom_symbolic_literal_to_term(self):
         self.assertEqual(
-            ast_reify.symbolic_literal_to_term(parse_literal("&k{ p(X) }")),
+            ast_reify.symbolic_literal_to_term(_lib, parse_literal("&k{ p(X) }")),
             parse_literal("&k{ p(X) }"),
         )
         self.assertEqual(
-            ast_reify.symbolic_literal_to_term(parse_literal("&k{ p(X) }")),
+            ast_reify.symbolic_literal_to_term(_lib, parse_literal("&k{ p(X) }")),
             parse_literal("&k{ p(X) }"),
         )
         self.assertEqual(
-            ast_reify.symbolic_literal_to_term(parse_literal("&k{ p(X) }")),
+            ast_reify.symbolic_literal_to_term(_lib, parse_literal("&k{ p(X) }")),
             parse_literal("&k{ p(X) }"),
         )

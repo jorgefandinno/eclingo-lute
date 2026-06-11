@@ -1,28 +1,13 @@
-import clingo
+from clingo.control import Control
+from clingo.core import Library
+
 import eclingo.clingox.program
 
 
-def parse_program(program_str: str):
-    control = clingo.Control()
+def parse_program(lib: Library, program_str: str):
+    control = Control(lib)
     program = eclingo.clingox.program.Program()
-    control.register_observer(eclingo.clingox.program.ProgramObserver(program))
-    control.add(program_str)
+    control.parse_string(program_str)
     control.ground()
+    control.observe(eclingo.clingox.program.ProgramObserver(program), preprocess=False)
     return [f.symbol for f in program.facts]
-
-
-# if __name__ == "__main__":
-# control = clingo.Control()
-# program = parse_program("a(1). b(1).")
-# print(program)
-# with control.backend() as backend:
-#     mapping = eclingo.clingox.program.Remapping(backend, program.output_atoms, program.facts)
-#     program.add_to_backend(backend, mapping)
-# control.add("c(X) :- a(X).")
-# control.ground()
-# with control.solve(yield_=True) as handle:
-#     print("=========")
-#     for model in handle:
-#         print(model)
-
-# with control.builder() as builder:

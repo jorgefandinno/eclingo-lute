@@ -1,14 +1,13 @@
 """
 This module provides high-level functions to create unit tests for
-`clingo.ast.AST`s.
+`clingo.ast` nodes.
 """
 
-from typing import Any, List, cast
+from typing import Any
 from unittest import TestCase
 
-from clingo.ast import AST, ASTType, parse_string
-
-from eclingo.clingox.pprint import pformat
+from clingo import ast
+from clingo.core import Library
 
 __all__ = [
     "ASTTestCase",
@@ -17,41 +16,48 @@ __all__ = [
     "parse_term",
 ]
 
+# All AST node classes in clingo.ast. They are identified by providing the
+# `visit` method.
+_AST_CLASSES = tuple(
+    cls
+    for cls in (getattr(ast, name) for name in dir(ast) if not name.startswith("_"))
+    if isinstance(cls, type) and hasattr(cls, "visit")
+)
 
-def parse_statement(stm: str) -> AST:
+
+def parse_statement(lib: Library, stm: str) -> ast.Statement:
     """
     Parse a statement.
     """
-    stms: List[AST] = []
-    parse_string(stm, stms.append, logger=lambda code, msg: None, message_limit=1)
-    if len(stms) != 2:
-        raise RuntimeError(
-            f"syntax error: stm must contain exactly one statement, {len(stms)} given"
-        )
-    return cast(AST, stms[1])
+    try:
+        return ast.parse_statement(lib, stm)
+    except RuntimeError as exc:
+        raise RuntimeError(f"syntax error: {exc}") from None
 
 
-def parse_literal(lit: str) -> AST:
+def parse_literal(lib: Library, lit: str) -> ast.Literal:
     """
     Parse a literal.
     """
-    stm = parse_statement(f":-{lit}.")
-    if stm.body[0].ast_type != ASTType.Literal:
-        raise RuntimeError("syntax error: lit must be a string representing a literal")
-    return stm.body[0]
+    try:
+        return ast.parse_literal(lib, lit)
+    except RuntimeError as exc:
+        raise RuntimeError(f"syntax error: {exc}") from None
 
 
-def parse_term(term: str) -> AST:
+def parse_term(lib: Library, term: str) -> ast.Term:
     """
     Parse a term.
     """
-    lit = parse_literal(f"atom({term})")
-    return lit.atom.symbol.arguments[0]
+    try:
+        return ast.parse_term(lib, term)
+    except RuntimeError as exc:
+        raise RuntimeError(f"syntax error: {exc}") from None
 
 
 class ASTTestCase(TestCase):
     """
-    Class for comparing with `clingo.ast.AST`s.
+    Class for comparing `clingo.ast` nodes.
     """
 
     def __init__(self, methodName: str = "runTest"):
@@ -61,18 +67,14 @@ class ASTTestCase(TestCase):
         method with the specified name.
         """
         super().__init__(methodName)
-        self.addTypeEqualityFunc(AST, self.assertASTEqual)
+        for cls in _AST_CLASSES:
+            self.addTypeEqualityFunc(cls, self.assertASTEqual)
 
-    def assertASTEqual(self, first: AST, second: AST, msg: Any = None):
+    def assertASTEqual(self, first: Any, second: Any, msg: Any = None):
         """
-        Test whether two `clingo.ast.AST`s are equal.
+        Test whether two `clingo.ast` nodes are equal.
         """
         # pylint: disable=invalid-name
-        self.assertIsInstance(first, AST, "First argument is not an AST")
-        self.assertIsInstance(second, AST, "Second argument is not an AST")
-
         self.assertEqual(str(first), str(second), msg)
-        first_repr = pformat(first, hide_location=True) + "\n"
-        second_repr = pformat(second, hide_location=True) + "\n"
-        self.assertEqual(first_repr, second_repr, msg)
+        self.assertEqual(type(first).__name__, type(second).__name__, msg)
         assert first == second

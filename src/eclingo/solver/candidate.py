@@ -1,7 +1,7 @@
 import itertools
 from typing import NamedTuple, Sequence
 
-from clingo import Symbol
+from clingo.symbol import Symbol
 
 
 class Assumptions(NamedTuple):

@@ -5,6 +5,7 @@ Simple tests for solving.
 from unittest import TestCase
 
 from clingo.control import Control
+from clingo.core import Library
 
 from eclingo.clingox.solving import approximate
 
@@ -14,13 +15,16 @@ class TestSolving(TestCase):
     Tests for solving module.
     """
 
+    def setUp(self):
+        self.lib = Library(message_limit=0)
+
     def approximate(self, prg: str, expected_res):
         """
         Auxiliary function to test approximate.
         """
-        ctl = Control()
-        ctl.add("base", [], prg)
-        ctl.ground([("base", [])])
+        ctl = Control(self.lib)
+        ctl.parse_string(prg)
+        ctl.ground()
         res = approximate(ctl)
         if res:
             sorted_res = (

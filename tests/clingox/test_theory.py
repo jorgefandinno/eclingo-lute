@@ -5,6 +5,7 @@ Simple tests for term evaluation.
 from unittest import TestCase
 
 from clingo.control import Control
+from clingo.core import Library
 from clingo.symbol import Function, Number, String, Symbol, Tuple_
 
 from eclingo.clingox.theory import (
@@ -16,14 +17,12 @@ from eclingo.clingox.theory import (
 )
 
 
-def eval_term_sym(s: str) -> Symbol:
+def eval_term_sym(lib: Library, s: str) -> Symbol:
     """
     Evaluate the given theory term and return its string representation.
     """
-    ctl = Control()
-    ctl.add(
-        "base",
-        [],
+    ctl = Control(lib)
+    ctl.parse_string(
         f"""
 #theory test {{
     t {{
@@ -43,17 +42,10 @@ def eval_term_sym(s: str) -> Symbol:
 &a {{{s}}}.
 """,
     )
-    ctl.ground([("base", [])])
-    for x in ctl.theory_atoms:
-        return evaluate(x.elements[0].terms[0])
+    ctl.ground()
+    for x in ctl.base.theory:
+        return evaluate(lib, x.elements[0].tuple[0])
     assert False
-
-
-def eval_term(s: str) -> str:
-    """
-    Evaluate the given theory term and return its string representation.
-    """
-    return str(eval_term_sym(s))
 
 
 class TestTheory(TestCase):
@@ -61,103 +53,137 @@ class TestTheory(TestCase):
     Tests for theory term evaluation.
     """
 
+    def setUp(self):
+        self.lib = Library()
+
+    def eval_term(self, s: str) -> str:
+        """
+        Evaluate the given theory term and return its string representation.
+        """
+        return str(eval_term_sym(self.lib, s))
+
     def test_binary(self):
         """
         Test evaluation of binary terms.
         """
-        self.assertEqual(eval_term("2+3"), "5")
-        self.assertEqual(eval_term("2-3"), "-1")
-        self.assertEqual(eval_term("2*3"), "6")
-        self.assertEqual(eval_term("7/2"), "3")
-        self.assertEqual(eval_term("7\\2"), "1")
-        self.assertEqual(eval_term("2**3"), "8")
+        self.assertEqual(self.eval_term("2+3"), "5")
+        self.assertEqual(self.eval_term("2-3"), "-1")
+        self.assertEqual(self.eval_term("2*3"), "6")
+        self.assertEqual(self.eval_term("7/2"), "3")
+        self.assertEqual(self.eval_term("7\\2"), "1")
+        self.assertEqual(self.eval_term("2**3"), "8")
 
     def test_unary(self):
         """
         Test evaluation of unary terms.
         """
-        self.assertEqual(eval_term("-1"), "-1")
-        self.assertEqual(eval_term("+1"), "1")
-        self.assertEqual(eval_term("-f"), "-f")
-        self.assertEqual(eval_term("-f(x)"), "-f(x)")
-        self.assertEqual(eval_term("-(-f(x))"), "f(x)")
+        self.assertEqual(self.eval_term("-1"), "-1")
+        self.assertEqual(self.eval_term("+1"), "1")
+        self.assertEqual(self.eval_term("-f"), "-f")
+        self.assertEqual(self.eval_term("-f(x)"), "-f(x)")
+        self.assertEqual(self.eval_term("-(-f(x))"), "f(x)")
 
     def test_nesting(self):
         """
         Test evaluation of nested terms
         """
-        self.assertEqual(eval_term("f(2+3*4,-g(-1))"), "f(14,-g(-1))")
-        self.assertEqual(eval_term("f(2+3*4,-g(-1),0)"), "f(14,-g(-1),0)")
+        self.assertEqual(self.eval_term("f(2+3*4,-g(-1))"), "f(14,-g(-1))")
+        self.assertEqual(self.eval_term("f(2+3*4,-g(-1),0)"), "f(14,-g(-1),0)")
 
     def test_string(self):
         """
         Test evaluation of strings.
         """
-        self.assertEqual(eval_term_sym('"a\\\\b\\nc\\"d"'), String('a\\b\nc"d'))
+        self.assertEqual(
+            eval_term_sym(self.lib, '"a\\\\b\\nc\\"d"'), String(self.lib, 'a\\b\nc"d')
+        )
 
     def test_tuple(self):
         """
         Test evaluation of tuple terms.
         """
-        self.assertEqual(eval_term("(1,2)"), "(1,2)")
-        self.assertEqual(eval_term("(1,2,3)"), "(1,2,3)")
-        self.assertEqual(eval_term("(1+1,2*3)"), "(2,6)")
+        self.assertEqual(self.eval_term("(1,2)"), "(1,2)")
+        self.assertEqual(self.eval_term("(1,2,3)"), "(1,2,3)")
+        self.assertEqual(self.eval_term("(1+1,2*3)"), "(2,6)")
 
     def test_list_error(self):
         """
         Test that list terms raise a RuntimeError.
         """
-        self.assertRaises(RuntimeError, eval_term, "[1]")
-        self.assertRaises(RuntimeError, eval_term, "[1,2]")
+        self.assertRaises(RuntimeError, self.eval_term, "[1]")
+        self.assertRaises(RuntimeError, self.eval_term, "[1,2]")
 
     def test_error(self):
         """
         Test failed term evaluation.
         """
-        self.assertRaises(TypeError, eval_term, "-(1,2)")
-        self.assertRaises(TypeError, eval_term, "+a")
-        self.assertRaises(RuntimeError, eval_term, "{1}")
-        self.assertRaises(AttributeError, eval_term, "?2")
-        self.assertRaises(AttributeError, eval_term, "1?2")
-        self.assertRaises(ZeroDivisionError, eval_term, "1\\0")
-        self.assertRaises(ZeroDivisionError, eval_term, "1/0")
+        self.assertRaises(TypeError, self.eval_term, "-(1,2)")
+        self.assertRaises(TypeError, self.eval_term, "+a")
+        self.assertRaises(RuntimeError, self.eval_term, "{1}")
+        self.assertRaises(AttributeError, self.eval_term, "?2")
+        self.assertRaises(AttributeError, self.eval_term, "1?2")
+        self.assertRaises(ZeroDivisionError, self.eval_term, "1\\0")
+        self.assertRaises(ZeroDivisionError, self.eval_term, "1/0")
 
 
 class TestRequireNumber(TestCase):
+    def setUp(self):
+        self.lib = Library()
+
     def test_number(self):
-        self.assertEqual(require_number(Number(5)), 5)
-        self.assertEqual(require_number(Number(-3)), -3)
-        self.assertEqual(require_number(Number(0)), 0)
+        self.assertEqual(require_number(Number(self.lib, 5)), 5)
+        self.assertEqual(require_number(Number(self.lib, -3)), -3)
+        self.assertEqual(require_number(Number(self.lib, 0)), 0)
 
     def test_non_number(self):
-        self.assertRaises(TypeError, require_number, Function("a"))
-        self.assertRaises(TypeError, require_number, String("hello"))
+        self.assertRaises(TypeError, require_number, Function(self.lib, "a"))
+        self.assertRaises(TypeError, require_number, String(self.lib, "hello"))
 
 
 class TestInvertSymbol(TestCase):
+    def setUp(self):
+        self.lib = Library()
+
     def test_number(self):
-        self.assertEqual(invert_symbol(Number(5)), Number(-5))
-        self.assertEqual(invert_symbol(Number(-3)), Number(3))
-        self.assertEqual(invert_symbol(Number(0)), Number(0))
+        self.assertEqual(
+            invert_symbol(self.lib, Number(self.lib, 5)), Number(self.lib, -5)
+        )
+        self.assertEqual(
+            invert_symbol(self.lib, Number(self.lib, -3)), Number(self.lib, 3)
+        )
+        self.assertEqual(
+            invert_symbol(self.lib, Number(self.lib, 0)), Number(self.lib, 0)
+        )
 
     def test_positive_function(self):
         self.assertEqual(
-            invert_symbol(Function("a", [], True)), Function("a", [], False)
+            invert_symbol(self.lib, Function(self.lib, "a", [], True)),
+            Function(self.lib, "a", [], False),
         )
         self.assertEqual(
-            invert_symbol(Function("f", [Number(1)], True)),
-            Function("f", [Number(1)], False),
+            invert_symbol(
+                self.lib, Function(self.lib, "f", [Number(self.lib, 1)], True)
+            ),
+            Function(self.lib, "f", [Number(self.lib, 1)], False),
         )
 
     def test_negative_function(self):
         self.assertEqual(
-            invert_symbol(Function("a", [], False)), Function("a", [], True)
+            invert_symbol(self.lib, Function(self.lib, "a", [], False)),
+            Function(self.lib, "a", [], True),
         )
 
     def test_error(self):
-        self.assertRaises(TypeError, invert_symbol, String("hello"))
-        self.assertRaises(TypeError, invert_symbol, Tuple_([Number(1), Number(2)]))
-        self.assertRaises(TypeError, invert_symbol, Function("", [], True))
+        self.assertRaises(TypeError, invert_symbol, self.lib, String(self.lib, "hello"))
+        self.assertRaises(
+            TypeError,
+            invert_symbol,
+            self.lib,
+            Tuple_(self.lib, [Number(self.lib, 1), Number(self.lib, 2)]),
+        )
+        self.assertRaises(
+            TypeError, invert_symbol, self.lib, Function(self.lib, "", [], True)
+        )
 
 
 class TestIsOperator(TestCase):

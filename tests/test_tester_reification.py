@@ -1,5 +1,6 @@
 import unittest
 
+from clingo.core import Library
 from clingo.symbol import Function
 
 import eclingo as _eclingo
@@ -13,12 +14,12 @@ from tests.parse_programs import parse_program
 """ Helper function to generate candidates for a given program and test them"""
 
 
-def tester(program, candidates):
-    program = parse_program(program)
+def tester(lib, program, candidates):
+    program = parse_program(lib, program)
     config = _eclingo.config.AppConfig()
     config.eclingo_semantics = "c19-1"
 
-    test_candidate = CandidateTesterReification(config, program)
+    test_candidate = CandidateTesterReification(lib, config, program)
     tested = []
     for candidate in candidates:
         if test_candidate(candidate):
@@ -29,6 +30,9 @@ def tester(program, candidates):
 
 
 class TestCase(unittest.TestCase):
+    def setUp(self):
+        self.lib = Library(message_limit=0)
+
     def assert_models(self, candidates, expected):
         self.assertEqual(candidates, expected)
 
@@ -39,6 +43,7 @@ class TestEclingoTesterReification(TestCase):
         # "a. b :- &k{a}."
         self.assert_models(
             tester(
+                self.lib,
                 """tag(incremental). atom_tuple(0). atom_tuple(0,1). literal_tuple(0).
                                     rule(disjunction(0),normal(0)). atom_tuple(1).
                                     atom_tuple(1,2). rule(choice(1),normal(0)). atom_tuple(2).
@@ -50,8 +55,16 @@ class TestEclingoTesterReification(TestCase):
                         pos=[],
                         neg=[
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("a", [], True)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "a", [], True)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             )
                         ],
@@ -59,8 +72,16 @@ class TestEclingoTesterReification(TestCase):
                     Candidate(
                         pos=[
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("a", [], True)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "a", [], True)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             )
                         ],
@@ -72,7 +93,17 @@ class TestEclingoTesterReification(TestCase):
                 Candidate(
                     pos=[
                         Function(
-                            "k", [Function("u", [Function("a", [], True)], True)], True
+                            self.lib,
+                            "k",
+                            [
+                                Function(
+                                    self.lib,
+                                    "u",
+                                    [Function(self.lib, "a", [], True)],
+                                    True,
+                                )
+                            ],
+                            True,
                         )
                     ],
                     neg=[],
@@ -84,6 +115,7 @@ class TestEclingoTesterReification(TestCase):
         # echo "a. b :- &k{ not not a }." | eclingo --output=reify --semantics c19-1 --reification
         self.assert_models(
             tester(
+                self.lib,
                 """tag(incremental). atom_tuple(0). atom_tuple(0,1). literal_tuple(0). rule(disjunction(0),normal(0)).
                         atom_tuple(1). atom_tuple(1,2). rule(disjunction(1),normal(0)). atom_tuple(2). atom_tuple(2,3).
                         rule(choice(2),normal(0)). atom_tuple(3). atom_tuple(3,4). literal_tuple(1). literal_tuple(1,3).
@@ -94,13 +126,18 @@ class TestEclingoTesterReification(TestCase):
                     Candidate(
                         pos=[
                             Function(
+                                self.lib,
                                 "k",
                                 [
                                     Function(
+                                        self.lib,
                                         "not2",
                                         [
                                             Function(
-                                                "u", [Function("a", [], True)], True
+                                                self.lib,
+                                                "u",
+                                                [Function(self.lib, "a", [], True)],
+                                                True,
                                             )
                                         ],
                                         True,
@@ -117,11 +154,20 @@ class TestEclingoTesterReification(TestCase):
                 Candidate(
                     pos=[
                         Function(
+                            self.lib,
                             "k",
                             [
                                 Function(
+                                    self.lib,
                                     "not2",
-                                    [Function("u", [Function("a", [], True)], True)],
+                                    [
+                                        Function(
+                                            self.lib,
+                                            "u",
+                                            [Function(self.lib, "a", [], True)],
+                                            True,
+                                        )
+                                    ],
                                     True,
                                 )
                             ],
@@ -137,6 +183,7 @@ class TestEclingoTesterReification(TestCase):
         # echo "-a. b:- &k{-a}. c :- b." | eclingo --semantics c19-1 --reification --output=reify
         self.assert_models(
             tester(
+                self.lib,
                 """tag(incremental). atom_tuple(0). atom_tuple(0,1). literal_tuple(0). rule(disjunction(0),normal(0)).
                     atom_tuple(1). atom_tuple(1,2). rule(choice(1),normal(0)). atom_tuple(2). atom_tuple(2,3).
                     literal_tuple(1). literal_tuple(1,2). rule(disjunction(2),normal(1)). atom_tuple(3). atom_tuple(3,4).
@@ -148,8 +195,16 @@ class TestEclingoTesterReification(TestCase):
                         pos=[],
                         neg=[
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("a", [], False)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "a", [], False)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             )
                         ],
@@ -157,8 +212,16 @@ class TestEclingoTesterReification(TestCase):
                     Candidate(
                         pos=[
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("a", [], False)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "a", [], False)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             )
                         ],
@@ -170,7 +233,17 @@ class TestEclingoTesterReification(TestCase):
                 Candidate(
                     pos=[
                         Function(
-                            "k", [Function("u", [Function("a", [], False)], True)], True
+                            self.lib,
+                            "k",
+                            [
+                                Function(
+                                    self.lib,
+                                    "u",
+                                    [Function(self.lib, "a", [], False)],
+                                    True,
+                                )
+                            ],
+                            True,
                         )
                     ],
                     neg=[],
@@ -183,6 +256,7 @@ class TestEclingoTesterReification(TestCase):
         # echo "-a. b :- &k{-a}." | eclingo --semantics c19-1 --reification --output=reify
         self.assert_models(
             tester(
+                self.lib,
                 """atom_tuple(0). atom_tuple(0,1). literal_tuple(0). rule(disjunction(0),normal(0)). atom_tuple(1).
                     atom_tuple(1,2). rule(choice(1),normal(0)). atom_tuple(2). atom_tuple(2,3). literal_tuple(1).
                     literal_tuple(1,2). rule(disjunction(2),normal(1)). output(k(u(-a)),1). output(u(-a),0). literal_tuple(2).
@@ -191,8 +265,16 @@ class TestEclingoTesterReification(TestCase):
                     Candidate(
                         pos=[
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("a", [], False)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "a", [], False)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             )
                         ],
@@ -204,7 +286,17 @@ class TestEclingoTesterReification(TestCase):
                 Candidate(
                     pos=[
                         Function(
-                            "k", [Function("u", [Function("a", [], False)], True)], True
+                            self.lib,
+                            "k",
+                            [
+                                Function(
+                                    self.lib,
+                                    "u",
+                                    [Function(self.lib, "a", [], False)],
+                                    True,
+                                )
+                            ],
+                            True,
                         )
                     ],
                     neg=[],
@@ -217,6 +309,7 @@ class TestEclingoTesterReification(TestCase):
         # echo "-a. b :- &k{-a}. c :- &k{b}." | eclingo --semantics c19-1 --reification --output=reify
         self.assert_models(
             tester(
+                self.lib,
                 """tag(incremental).
                                     atom_tuple(0). atom_tuple(0,1). literal_tuple(0). rule(disjunction(0),normal(0)).
                                     atom_tuple(1). atom_tuple(1,2). rule(choice(1),normal(0)).
@@ -233,13 +326,29 @@ class TestEclingoTesterReification(TestCase):
                         pos=[],
                         neg=[
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("b", [], True)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "b", [], True)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             ),
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("a", [], False)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "a", [], False)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             ),
                         ],
@@ -247,13 +356,29 @@ class TestEclingoTesterReification(TestCase):
                     Candidate(
                         pos=[
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("b", [], True)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "b", [], True)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             ),
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("a", [], False)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "a", [], False)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             ),
                         ],
@@ -262,15 +387,31 @@ class TestEclingoTesterReification(TestCase):
                     Candidate(
                         pos=[
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("a", [], False)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "a", [], False)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             )
                         ],
                         neg=[
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("b", [], True)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "b", [], True)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             )
                         ],
@@ -281,10 +422,30 @@ class TestEclingoTesterReification(TestCase):
                 Candidate(
                     pos=[
                         Function(
-                            "k", [Function("u", [Function("b", [], True)], True)], True
+                            self.lib,
+                            "k",
+                            [
+                                Function(
+                                    self.lib,
+                                    "u",
+                                    [Function(self.lib, "b", [], True)],
+                                    True,
+                                )
+                            ],
+                            True,
                         ),
                         Function(
-                            "k", [Function("u", [Function("a", [], False)], True)], True
+                            self.lib,
+                            "k",
+                            [
+                                Function(
+                                    self.lib,
+                                    "u",
+                                    [Function(self.lib, "a", [], False)],
+                                    True,
+                                )
+                            ],
+                            True,
                         ),
                     ],
                     neg=[],
@@ -297,6 +458,7 @@ class TestEclingoTesterReification(TestCase):
         # echo "{a}. :- not a. b :- &k{a}. c :- &k{b}." | eclingo --semantics c19-1 --reification --output=reify
         self.assert_models(
             tester(
+                self.lib,
                 """tag(incremental). atom_tuple(0). atom_tuple(0,1). literal_tuple(0).
                                          rule(choice(0),normal(0)). atom_tuple(1). atom_tuple(1,2). literal_tuple(1).
                                          literal_tuple(1,1). rule(choice(1),normal(1)). atom_tuple(2). atom_tuple(2,3).
@@ -313,13 +475,29 @@ class TestEclingoTesterReification(TestCase):
                         pos=[],
                         neg=[
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("a", [], True)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "a", [], True)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             ),
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("b", [], True)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "b", [], True)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             ),
                         ],
@@ -327,15 +505,31 @@ class TestEclingoTesterReification(TestCase):
                     Candidate(
                         pos=[
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("a", [], True)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "a", [], True)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             )
                         ],
                         neg=[
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("b", [], True)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "b", [], True)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             )
                         ],
@@ -343,13 +537,29 @@ class TestEclingoTesterReification(TestCase):
                     Candidate(
                         pos=[
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("a", [], True)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "a", [], True)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             ),
                             Function(
+                                self.lib,
                                 "k",
-                                [Function("u", [Function("b", [], True)], True)],
+                                [
+                                    Function(
+                                        self.lib,
+                                        "u",
+                                        [Function(self.lib, "b", [], True)],
+                                        True,
+                                    )
+                                ],
                                 True,
                             ),
                         ],
@@ -361,10 +571,30 @@ class TestEclingoTesterReification(TestCase):
                 Candidate(
                     pos=[
                         Function(
-                            "k", [Function("u", [Function("a", [], True)], True)], True
+                            self.lib,
+                            "k",
+                            [
+                                Function(
+                                    self.lib,
+                                    "u",
+                                    [Function(self.lib, "a", [], True)],
+                                    True,
+                                )
+                            ],
+                            True,
                         ),
                         Function(
-                            "k", [Function("u", [Function("b", [], True)], True)], True
+                            self.lib,
+                            "k",
+                            [
+                                Function(
+                                    self.lib,
+                                    "u",
+                                    [Function(self.lib, "b", [], True)],
+                                    True,
+                                )
+                            ],
+                            True,
                         ),
                     ],
                     neg=[],

@@ -12,13 +12,16 @@ The following example shows how to add the rules
 
 to a program using the `SymbolicBackend`:
 
-    >>> import clingo
+    >>> from clingo.control import Control
+    >>> from clingo.core import Library
+    >>> from clingo.symbol import Function
     >>> from eclingo.clingox.backend import SymbolicBackend
-    >>> ctl = clingo.Control()
-    >>> a = clingo.Function("a")
-    >>> b = clingo.Function("b")
-    >>> c = clingo.Function("c")
-    >>> with SymbolicBackend(ctl.backend()) as symbolic_backend:
+    >>> lib = Library()
+    >>> ctl = Control(lib)
+    >>> a = Function(lib, "a")
+    >>> b = Function(lib, "b")
+    >>> c = Function(lib, "c")
+    >>> with SymbolicBackend(ctl.backend) as symbolic_backend:
             symbolic_backend.add_rule([a], [b], [c])
             symbolic_backend.add_rule([b])
     >>> ctl.solve(on_model=lambda m: print("Answer: {}".format(m)))
@@ -26,29 +29,21 @@ to a program using the `SymbolicBackend`:
     SAT
 
 The `SymbolicBackend` can also be used in combination with the `Backend`
-that it wraps. In this case, it is the `Backend` that must be used with
+that it wraps. In this case, it is the backend manager that must be used with
 Python's `with` statement:
 
-    >>> import clingo
-    >>> from eclingo.clingox.backend import SymbolicBackend
-    >>> ctl = clingo.Control()
-    >>> a = clingo.Function("a")
-    >>> b = clingo.Function("b")
-    >>> c = clingo.Function("c")
-    >>> with ctl.backend() as backend:
+    >>> with ctl.backend as backend:
             symbolic_backend = SymbolicBackend(backend)
             symbolic_backend.add_rule([a], [b], [c])
-            atom_b = backend.add_atom(b)
-            backend.add_rule([atom_b])
-    >>> ctl.solve(on_model=lambda m: print("Answer: {}".format(m)))
-    Answer: a b
-    SAT
+            atom_b = backend.atom(b)
+            backend.rule([atom_b])
 """
 
 from itertools import chain
-from typing import Iterable, Sequence, Tuple
+from typing import Iterable, Optional, Sequence, Tuple, Union
 
-from clingo import Backend, HeuristicType, Symbol, TruthValue
+from clingo.backend import Backend, BackendManager, ExternalType, HeuristicType
+from clingo.symbol import Symbol
 
 __all__ = ["SymbolicBackend"]
 
@@ -73,17 +68,23 @@ class SymbolicBackend:
     Notes
     --------
     The `SymbolicBackend` is a context manager and must be used with Python's
-    `with` statement or be attached to an already managed
-    `clingo.backend.Backend` object.
+    `with` statement when constructed from a `clingo.backend.BackendManager`,
+    or be attached to a `clingo.backend.Backend` object obtained from an
+    already managed `clingo.backend.BackendManager`.
     """
 
-    backend: Backend
+    backend: Optional[Backend]
     """
     The underlying `clingo.backend.Backend` object.
     """
 
-    def __init__(self, backend: Backend):
-        self.backend: Backend = backend
+    def __init__(self, backend: Union[Backend, BackendManager]):
+        if isinstance(backend, BackendManager):
+            self._manager: Optional[BackendManager] = backend
+            self.backend = None
+        else:
+            self._manager = None
+            self.backend = backend
 
     def __enter__(self):
         """
@@ -97,7 +98,8 @@ class SymbolicBackend:
         -----
         Must be called before using the backend.
         """
-        self.backend.__enter__()
+        if self._manager is not None:
+            self.backend = self._manager.__enter__()
         return self
 
     def __exit__(self, type_, value, traceback):
@@ -108,7 +110,17 @@ class SymbolicBackend:
         -----
         Follows Python's __exit__ conventions. Does not suppress exceptions.
         """
-        return self.backend.__exit__(type_, value, traceback)
+        if self._manager is not None:
+            self.backend = None
+            return self._manager.__exit__(type_, value, traceback)
+        return False
+
+    @property
+    def _backend(self) -> Backend:
+        assert (
+            self.backend is not None
+        ), "SymbolicBackend must be used as a context manager"
+        return self.backend
 
     def add_acyc_edge(
         self,
@@ -134,7 +146,7 @@ class SymbolicBackend:
         condition = chain(
             self._add_lits(pos_condition, True), self._add_lits(neg_condition, False)
         )
-        self.backend.add_acyc_edge(node_u, node_v, list(condition))
+        self._backend.edge(node_u, node_v, list(condition))
 
     def add_assume(
         self, pos_atoms: Sequence[Symbol] = (), neg_atoms: Sequence[Symbol] = ()
@@ -152,9 +164,11 @@ class SymbolicBackend:
         literals = chain(
             self._add_lits(pos_atoms, True), self._add_lits(neg_atoms, False)
         )
-        self.backend.add_assume(list(literals))
+        self._backend.assume(list(literals))
 
-    def add_external(self, atom: Symbol, value: TruthValue = TruthValue.False_) -> None:
+    def add_external(
+        self, atom: Symbol, value: ExternalType = ExternalType.False_
+    ) -> None:
         """
         Mark an atom as external and set its truth value.
 
@@ -167,9 +181,10 @@ class SymbolicBackend:
 
         Notes
         -----
-        Can also be used to release an external atom using `TruthValue.Release`.
+        Can also be used to release an external atom using
+        `ExternalType.Release`.
         """
-        return self.backend.add_external(self.backend.add_atom(atom), value)
+        return self._backend.external(self._backend.atom(atom), value)
 
     def add_heuristic(
         self,
@@ -202,8 +217,8 @@ class SymbolicBackend:
         condition = chain(
             self._add_lits(pos_condition, True), self._add_lits(neg_condition, False)
         )
-        return self.backend.add_heuristic(
-            self.backend.add_atom(atom), type_, bias, priority, list(condition)
+        return self._backend.heuristic(
+            self._backend.atom(atom), type_, bias, priority, list(condition)
         )
 
     def add_minimize(
@@ -229,7 +244,7 @@ class SymbolicBackend:
         literals = chain(
             self._add_wlits(pos_literals, True), self._add_wlits(neg_literals, False)
         )
-        return self.backend.add_minimize(priority, list(literals))
+        return self._backend.minimize(list(literals), priority)
 
     def add_project(self, atoms: Sequence[Symbol]) -> None:
         """
@@ -240,7 +255,7 @@ class SymbolicBackend:
         atoms
             List of atoms to project on.
         """
-        return self.backend.add_project(list(self._add_lits(atoms, True)))
+        return self._backend.project(list(self._add_lits(atoms, True)))
 
     def add_rule(
         self,
@@ -269,9 +284,7 @@ class SymbolicBackend:
         singleton head list, respectively.
         """
         body = chain(self._add_lits(pos_body, True), self._add_lits(neg_body, False))
-        return self.backend.add_rule(
-            list(self._add_lits(head, True)), list(body), choice
-        )
+        return self._backend.rule(list(self._add_lits(head, True)), list(body), choice)
 
     def add_weight_rule(
         self,
@@ -301,7 +314,7 @@ class SymbolicBackend:
             Whether to add a disjunctive or choice rule.
         """
         body = chain(self._add_wlits(pos_body, True), self._add_wlits(neg_body, False))
-        return self.backend.add_weight_rule(
+        return self._backend.weight_rule(
             list(self._add_lits(head, True)), lower, list(body), choice
         )
 
@@ -309,7 +322,7 @@ class SymbolicBackend:
         """
         Map the given atoms to program literals with the given sign.
         """
-        return (_add_sign(self.backend.add_atom(symbol), sign) for symbol in atoms)
+        return (_add_sign(self._backend.atom(symbol), sign) for symbol in atoms)
 
     def _add_wlits(
         self, weighted_symbols: Sequence[Tuple[Symbol, int]], sign: bool
@@ -319,6 +332,5 @@ class SymbolicBackend:
         given sign.
         """
         return (
-            (_add_sign(self.backend.add_atom(x), sign), w)
-            for (x, w) in weighted_symbols
+            (_add_sign(self._backend.atom(x), sign), w) for (x, w) in weighted_symbols
         )

@@ -5,7 +5,10 @@ Test cases for the ground program and observer.
 from typing import cast
 from unittest import TestCase
 
-from clingo import Control, Function, HeuristicType, TruthValue
+from clingo.backend import ExternalType, HeuristicType
+from clingo.control import Control
+from clingo.core import Library
+from clingo.symbol import Function
 
 from eclingo.clingox.program import (
     Edge,
@@ -24,7 +27,7 @@ from eclingo.clingox.program import (
 )
 
 
-def _remap(prg: Program, mapping=None):
+def _remap(lib: Library, prg: Program, mapping=None):
     """
     Add the given program to a backend passing it through an observer and then
     return the observer program.
@@ -33,7 +36,7 @@ def _remap(prg: Program, mapping=None):
     program.
     """
 
-    ctl, chk = Control(), Program()
+    ctl, chk = Control(lib), Program()
     # note that output atoms are not passed to the backend
     if mapping is None:
         chk.output_atoms = prg.output_atoms
@@ -43,10 +46,10 @@ def _remap(prg: Program, mapping=None):
         chk.shows = [cast(Show, remap(x, mapping)) for x in prg.shows]
     chk.facts = prg.facts
 
-    ctl.register_observer(ProgramObserver(chk))
-
-    with ctl.backend() as b:
+    with ctl.backend as b:
         prg.add_to_backend(b, mapping)
+
+    ctl.observe(ProgramObserver(chk), preprocess=False)
 
     return chk
 
@@ -63,29 +66,28 @@ class TestProgram(TestCase):
     Tests for the program observer.
     """
 
+    lib: Library
     prg: Program
     obs: ProgramObserver
 
-    def __init__(self, *args, **kwargs):
-        TestCase.__init__(self, *args, **kwargs)
-        self.prg = Program()
-        self.obs = ProgramObserver(self.prg)
-
-    def tearDown(self):
+    def setUp(self):
+        self.lib = Library(message_limit=0)
         self.prg = Program()
         self.obs = ProgramObserver(self.prg)
 
     def _add_atoms(self, *atoms: str):
         """
         Generate an output table for the given atom names.
+
+        With clingo 6, the output table is computed from the base in
+        `ProgramObserver.end_step`, so the table is added to the program
+        directly here.
         """
         lit = 1
-        lits = []
         out, out10 = {}, {}
         for atom in atoms:
-            sym = Function(atom)
-            self.obs.output_atom(sym, lit)
-            lits.append(lit)
+            sym = Function(self.lib, atom)
+            self.prg.output_atoms[lit] = sym
             out[lit] = sym
             out10[_plus10(lit)] = sym
             lit += 1
@@ -104,11 +106,11 @@ class TestProgram(TestCase):
         self.assertEqual(self.prg, prg)
         self.assertEqual(str(self.prg), prg_str)
 
-        r_prg = _remap(self.prg)
+        r_prg = _remap(self.lib, self.prg)
         self.assertEqual(self.prg, r_prg)
         self.assertEqual(str(r_prg), prg_str)
 
-        r_prg10 = _remap(self.prg, _plus10)
+        r_prg10 = _remap(self.lib, self.prg, _plus10)
         self.assertEqual(r_prg10, prg10)
         self.assertEqual(str(r_prg10), prg_str)
 
@@ -117,10 +119,10 @@ class TestProgram(TestCase):
         self.assertEqual(str(ra_prg10), prg_str)
 
         # note that the backend below is just used as an atom generator
-        ctl = Control()
-        with ctl.backend() as b:
+        ctl = Control(self.lib)
+        with ctl.backend as b:
             for _ in range(10):
-                b.add_atom()
+                b.atom()
             rm_prg = prg.copy().remap(
                 Remapping(b, self.prg.output_atoms, self.prg.facts)
             )
@@ -131,7 +133,7 @@ class TestProgram(TestCase):
         Test simple rules.
         """
         out, out10 = self._add_atoms("a", "b", "c")
-        self.obs.rule(False, [1], [2, -3])
+        self.obs.rule([1], [2, -3], False)
         self._check(
             Program(
                 output_atoms=out, rules=[Rule(choice=False, head=[1], body=[2, -3])]
@@ -148,14 +150,14 @@ class TestProgram(TestCase):
         Test printing of auxiliary literals.
         """
         out, out10 = self._add_atoms("a", "b", "c")
-        self.obs.rule(False, [4], [1])
+        self.obs.rule([4], [1], False)
         self.assertEqual(
             self.prg,
             Program(output_atoms=out, rules=[Rule(choice=False, head=[4], body=[1])]),
         )
         self.assertEqual(str(self.prg), "__x4 :- a.")
 
-        prg10 = _remap(self.prg, _plus10)
+        prg10 = _remap(self.lib, self.prg, _plus10)
         self.assertEqual(
             prg10,
             Program(
@@ -164,9 +166,9 @@ class TestProgram(TestCase):
         )
         self.assertEqual(str(prg10), "__x14 :- a.")
 
-        ctl = Control()
-        with ctl.backend() as b:
-            b.add_atom()
+        ctl = Control(self.lib)
+        with ctl.backend as b:
+            b.atom()
             rm_prg = self.prg.copy().remap(
                 Remapping(b, self.prg.output_atoms, self.prg.facts)
             )
@@ -177,10 +179,10 @@ class TestProgram(TestCase):
         Test simple rules.
         """
         out, out10 = self._add_atoms("a", "b", "c")
-        self.obs.output_atom(Function("d"), 0)
+        self.prg.facts.append(Fact(Function(self.lib, "d")))
         self._check(
-            Program(output_atoms=out, facts=[Fact(Function("d"))]),
-            Program(output_atoms=out10, facts=[Fact(Function("d"))]),
+            Program(output_atoms=out, facts=[Fact(Function(self.lib, "d"))]),
+            Program(output_atoms=out10, facts=[Fact(Function(self.lib, "d"))]),
             "d.",
         )
 
@@ -189,7 +191,7 @@ class TestProgram(TestCase):
         Test choice rules.
         """
         out, out10 = self._add_atoms("a", "b", "c")
-        self.obs.rule(True, [1], [2, -3])
+        self.obs.rule([1], [2, -3], True)
         self._check(
             Program(
                 output_atoms=out, rules=[Rule(choice=True, head=[1], body=[2, -3])]
@@ -203,41 +205,23 @@ class TestProgram(TestCase):
     def test_add_weight_rule(self):
         """
         Test weight rules.
-        """
-        out, out10 = self._add_atoms("a", "b", "c")
-        self.obs.weight_rule(True, [1], 10, [(2, 7), (-3, 5)])
-        self._check(
-            Program(
-                output_atoms=out,
-                weight_rules=[
-                    WeightRule(
-                        choice=True, head=[1], lower_bound=10, body=[(2, 7), (-3, 5)]
-                    )
-                ],
-            ),
-            Program(
-                output_atoms=out10,
-                weight_rules=[
-                    WeightRule(
-                        choice=True, head=[11], lower_bound=10, body=[(12, 7), (-13, 5)]
-                    )
-                ],
-            ),
-            "{a} :- 10 #sum {7,0: b; 5,1: not c}.",
-        )
 
-    def test_add_weight_choice_rule(self):
+        The weights and bound are chosen such that clingo 6 cannot normalize
+        the weight rule into normal or cardinality rules when it is added to a
+        backend. Positive body literals come first because clingo 6 reorders
+        them this way when the rule is added.
         """
-        Test weight rules that are also choice rules.
-        """
-        out, out10 = self._add_atoms("a", "b", "c")
-        self.obs.weight_rule(True, [1], 10, [(2, 7), (-3, 5)])
+        out, out10 = self._add_atoms("a", "b", "c", "d")
+        self.obs.weight_rule([1], 11, [(2, 7), (4, 4), (-3, 5)], True)
         self._check(
             Program(
                 output_atoms=out,
                 weight_rules=[
                     WeightRule(
-                        choice=True, head=[1], lower_bound=10, body=[(2, 7), (-3, 5)]
+                        choice=True,
+                        head=[1],
+                        lower_bound=11,
+                        body=[(2, 7), (4, 4), (-3, 5)],
                     )
                 ],
             ),
@@ -245,11 +229,14 @@ class TestProgram(TestCase):
                 output_atoms=out10,
                 weight_rules=[
                     WeightRule(
-                        choice=True, head=[11], lower_bound=10, body=[(12, 7), (-13, 5)]
+                        choice=True,
+                        head=[11],
+                        lower_bound=11,
+                        body=[(12, 7), (14, 4), (-13, 5)],
                     )
                 ],
             ),
-            "{a} :- 10 #sum {7,0: b; 5,1: not c}.",
+            "{a} :- 11 #sum {7,0: b; 4,1: d; 5,2: not c}.",
         )
 
     def test_add_project(self):
@@ -281,24 +268,24 @@ class TestProgram(TestCase):
         Test external statement.
         """
         out, out10 = self._add_atoms("a", "b", "c")
-        self.obs.external(1, TruthValue.True_)
-        self.obs.external(2, TruthValue.Free)
-        self.obs.external(3, TruthValue.False_)
+        self.obs.external(1, ExternalType.True_)
+        self.obs.external(2, ExternalType.Free)
+        self.obs.external(3, ExternalType.False_)
         self._check(
             Program(
                 output_atoms=out,
                 externals=[
-                    External(atom=1, value=TruthValue.True_),
-                    External(atom=2, value=TruthValue.Free),
-                    External(atom=3, value=TruthValue.False_),
+                    External(atom=1, value=ExternalType.True_),
+                    External(atom=2, value=ExternalType.Free),
+                    External(atom=3, value=ExternalType.False_),
                 ],
             ),
             Program(
                 output_atoms=out10,
                 externals=[
-                    External(atom=11, value=TruthValue.True_),
-                    External(atom=12, value=TruthValue.Free),
-                    External(atom=13, value=TruthValue.False_),
+                    External(atom=11, value=ExternalType.True_),
+                    External(atom=12, value=ExternalType.Free),
+                    External(atom=13, value=ExternalType.False_),
                 ],
             ),
             "#external a. [true]\n" "#external b. [free]\n" "#external c. [false]",
@@ -307,19 +294,26 @@ class TestProgram(TestCase):
     def test_add_minimize(self):
         """
         Test minimize statement.
+
+        The atoms are made open using a choice rule because clingo 6 would
+        otherwise simplify the unfounded atoms out of the minimize statement
+        when it is added to a backend.
         """
         out, out10 = self._add_atoms("a", "b", "c")
-        self.obs.minimize(10, [(1, 7), (3, 5)])
+        self.obs.rule([1, 2, 3], [], True)
+        self.obs.minimize([(1, 7), (3, 5)], 10)
         self._check(
             Program(
                 output_atoms=out,
+                rules=[Rule(choice=True, head=[1, 2, 3], body=[])],
                 minimizes=[Minimize(priority=10, literals=[(1, 7), (3, 5)])],
             ),
             Program(
                 output_atoms=out10,
+                rules=[Rule(choice=True, head=[11, 12, 13], body=[])],
                 minimizes=[Minimize(priority=10, literals=[(11, 7), (13, 5)])],
             ),
-            "#minimize{7@10,0: a; 5@10,1: c}.",
+            "{a; b; c}.\n#minimize{7@10,0: a; 5@10,1: c}.",
         )
 
     def test_add_edge(self):
@@ -327,7 +321,7 @@ class TestProgram(TestCase):
         Test edge statement.
         """
         out, out10 = self._add_atoms("a", "b", "c")
-        self.obs.acyc_edge(1, 2, [1])
+        self.obs.edge(1, 2, [1])
         self._check(
             Program(output_atoms=out, edges=[Edge(1, 2, [1])]),
             Program(output_atoms=out10, edges=[Edge(1, 2, [11])]),
@@ -355,9 +349,6 @@ class TestProgram(TestCase):
     def test_add_assume(self):
         """
         Test assumptions.
-
-        TODO: this test currently fails but probably has to be fixed in clingo
-        because assumptions are not observed properly.
         """
         out, out10 = self._add_atoms("a", "b", "c")
         self.obs.assume([1, 3])
@@ -371,9 +362,9 @@ class TestProgram(TestCase):
         """
         Test show statement.
         """
-        t = Function("t")
+        t = Function(self.lib, "t")
         out, out10 = self._add_atoms("a", "b", "c")
-        self.obs.output_term(t, [1])
+        self.prg.shows.append(Show(t, [1]))
         self._check(
             Program(output_atoms=out, shows=[Show(t, [1])]),
             Program(output_atoms=out10, shows=[Show(t, [11])]),
@@ -384,31 +375,27 @@ class TestProgram(TestCase):
         """
         Test observer together with a control object.
         """
-        ctl = Control()
-        ctl.register_observer(self.obs)
-        ctl.add(
-            "base",
-            [],
-            """\
+        ctl = Control(self.lib)
+        ctl.parse_string("""\
             b.
             {c}.
             a :- b, not c.
             #minimize{7@10,a:a; 5@10,c:c}.
             #project a.
             #project b.
-            #external a.
-            """,
-        )
-        ctl.ground([("base", [])])
-        a, b, c = (Function(s) for s in ("a", "b", "c"))
-        la, lb, lc = (ctl.symbolic_atoms[sym].literal for sym in (a, b, c))
+            #external d.
+            """)
+        ctl.ground()
+        ctl.observe(self.obs, preprocess=False)
+        a, b, c, d = (Function(self.lib, s) for s in ("a", "b", "c", "d"))
+        la, lb, lc, ld = (ctl.base[sym].literal for sym in (a, b, c, d))
 
         self.prg.sort()
 
         self.assertEqual(
             self.prg,
             Program(
-                output_atoms={la: a, lc: c},
+                output_atoms={la: a, lc: c, ld: d},
                 shows=[],
                 facts=[Fact(symbol=b)],
                 rules=[
@@ -416,8 +403,8 @@ class TestProgram(TestCase):
                     Rule(choice=False, head=[la], body=[-lc]),
                     Rule(choice=True, head=[lc], body=[]),
                 ],
-                minimizes=[Minimize(priority=10, literals=[(lc, 5), (la, 7)])],
-                externals=[External(atom=la, value=TruthValue.False_)],
+                minimizes=[Minimize(priority=10, literals=[(la, 7), (lc, 5)])],
+                externals=[External(atom=ld, value=ExternalType.False_)],
                 projects=[Project(atom=lb), Project(atom=la)],
             ).sort(),
         )

@@ -6,8 +6,8 @@ import sys
 import time
 from typing import Final, Sequence
 
-from clingo import Flag
-from clingo.application import clingo_main
+from clingo.app import App, AppOptions, Flag, clingo_main
+from clingo.core import Library
 
 from eclingo.config import AppConfig
 from eclingo.control import Control
@@ -19,7 +19,7 @@ STATISTICS_FIRST_FIELD_SIZE: Final[int] = 14
 
 def statistics(eclingo_control: Control, time: float):  # pragma: no cover
     assert eclingo_control.solver is not None
-    if int(eclingo_control.control.configuration.stats) > 0:
+    if int(eclingo_control.control.config.stats.value) > 0:
         sys.stderr.write("\n")  # pragma: no cover
         sys.stderr.write(
             f"{'Time ':<{STATISTICS_FIRST_FIELD_SIZE}}: {time:.3f}s "
@@ -43,13 +43,15 @@ def statistics(eclingo_control: Control, time: float):  # pragma: no cover
         )
 
 
-class Application:
+class Application(App):
     """
-    Application class that can be used with `clingo.clingo_main` to solve CSP
-    problems.
+    Application class that can be used with `clingo.app.clingo_main` to solve
+    CSP problems.
     """
 
-    def __init__(self):
+    def __init__(self, lib: Library):
+        super().__init__("eclingo", __version__)
+        self._lib = lib
         self.program_name = "eclingo"
         self.version = __version__
         self.config = AppConfig()
@@ -60,18 +62,16 @@ class Application:
     def _parse_string(self, config, attr):
         def parse(value):
             setattr(config, attr, value)  # pragma: no cover
-            return True  # pragma: no cover
 
         return parse
 
     def _parse_int(self, config, attr):
         def parse(value):
             setattr(config, attr, int(value))  # pragma: no cover
-            return True  # pragma: no cover
 
         return parse
 
-    def register_options(self, options) -> None:
+    def register_options(self, options: AppOptions) -> None:
         """
         Register eclingo related options.
         """
@@ -105,14 +105,14 @@ class Application:
             group=group,
             option="ignore-shows",
             description="Show statements are ignored (Default false)",
-            target=self.ingnore_shows,
+            flag=self.ingnore_shows,
         )
 
         options.add_flag(
             group=group,
             option="eclingo-propagate",
             description="Uses the propagation inside of the generator (Default true)",
-            target=self.use_propagate,
+            flag=self.use_propagate,
         )
 
     def _read(self, path):
@@ -121,7 +121,7 @@ class Application:
         with open(path) as file_:
             return file_.read()
 
-    def main(self, control: Control, files: Sequence[str]) -> None:
+    def main(self, control, files: Sequence[str]) -> None:
         """
         Entry point of the application registering the propagator and
         implementing the standard ground and solve functionality.
@@ -131,7 +131,7 @@ class Application:
         if not files:
             files = ["-"]
 
-        eclingo_control = Control(control, self.config)
+        eclingo_control = Control(self._lib, control, self.config)
 
         for path in files:
             eclingo_control.add_program(self._read(path))
@@ -141,22 +141,11 @@ class Application:
                 sys.stdout.write(str(stm))
                 sys.stdout.write("\n")
             return
-        self.config.ignore_shows = self.ingnore_shows.flag
-        self.config.propagate = self.use_propagate.flag
+
+        self.config.ignore_shows = self.ingnore_shows.value
+        self.config.propagate = self.use_propagate.value
 
         eclingo_control.ground()
-
-        # Command check
-        try:
-            output_index = sys.argv.index("--output=")
-        except ValueError:
-            output_index = -1
-        if (
-            "--output=reify" in sys.argv
-            or (output_index >= 0 and sys.argv[output_index + 1] == "reify")
-            or "--text" in sys.argv
-        ):
-            return  # pragma: no cover
 
         eclingo_control.preprocess()
         eclingo_control.prepare_solver()
@@ -177,9 +166,11 @@ class Application:
 
 
 def secondary_main(argv):
-    sys.argv.append("--outf=3")
-    application = Application()
-    result = clingo_main(application, argv[1:])
+    lib = Library(message_limit=0)
+    application = Application(lib)
+    # disable clingo's own output; with clingo 5 this was done with --outf=3
+    arguments = list(argv[1:]) + ["--outf=no"]
+    result = clingo_main(lib, arguments, application)
     return int(result)
 
 

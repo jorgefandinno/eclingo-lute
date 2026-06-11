@@ -8,9 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Setup
 
-Requires `clingo` installed via conda:
+Requires `clingo` version 6 installed via conda:
 ```bash
-conda activate clingo5
+conda activate clingo6
 pip install -e .[dev]
 ```
 
@@ -18,33 +18,33 @@ pip install -e .[dev]
 
 ### Testing
 
-All commands below must be run inside the `clingo5` conda environment (or via its full path `/home/jorge/miniconda3/envs/clingo5/bin/nox`):
+All commands below must be run inside the `clingo6` conda environment (or via its full path `/home/jorge/miniconda3/envs/clingo6/bin/nox`):
 
 ```bash
 # Run all fast tests (recommended during development)
-/home/jorge/miniconda3/envs/clingo5/bin/nox -Rs tests
+/home/jorge/miniconda3/envs/clingo6/bin/nox -Rs tests
 
 # Run slow tests (integration/example tests)
-/home/jorge/miniconda3/envs/clingo5/bin/nox -Rs slow_tests
+/home/jorge/miniconda3/envs/clingo6/bin/nox -Rs slow_tests
 
 # Run all tests + coverage (fails under 99%)
-/home/jorge/miniconda3/envs/clingo5/bin/nox -Rs all_tests
+/home/jorge/miniconda3/envs/clingo6/bin/nox -Rs all_tests
 
 # Run a single test file directly
-/home/jorge/miniconda3/envs/clingo5/bin/python -m unittest tests/test_eclingo.py -v
+/home/jorge/miniconda3/envs/clingo6/bin/python -m unittest tests/test_eclingo.py -v
 
 # Run a single test class
-/home/jorge/miniconda3/envs/clingo5/bin/python -m unittest tests.test_eclingo.TestEclingoGround -v
+/home/jorge/miniconda3/envs/clingo6/bin/python -m unittest tests.test_eclingo.TestEclingoGround -v
 ```
 
 Note: `nox -r` skips recreating virtual environments (faster subsequent runs).
 
 ### Code Quality
 ```bash
-/home/jorge/miniconda3/envs/clingo5/bin/nox -rs format          # auto-format with black + isort
-/home/jorge/miniconda3/envs/clingo5/bin/nox -rs typecheck       # run mypy
-/home/jorge/miniconda3/envs/clingo5/bin/nox -rs pylint          # run pylint
-/home/jorge/miniconda3/envs/clingo5/bin/nox -rs lint_flake8     # run flake8
+/home/jorge/miniconda3/envs/clingo6/bin/nox -rs format          # auto-format with black + isort
+/home/jorge/miniconda3/envs/clingo6/bin/nox -rs typecheck       # run mypy
+/home/jorge/miniconda3/envs/clingo6/bin/nox -rs pylint          # run pylint
+/home/jorge/miniconda3/envs/clingo6/bin/nox -rs lint_flake8     # run flake8
 ```
 
 ### Running eclingo
@@ -61,7 +61,7 @@ The pipeline is: **Parse → Ground (Reify) → Solve (Generate → Test → Bui
 
 ### `src/eclingo/`
 
-- **`main.py`** — CLI entry point; `Application` class wraps clingo's application framework. `secondary_main` always appends `--outf=3` (reification output format).
+- **`main.py`** — CLI entry point; `Application` class wraps clingo's application framework. `secondary_main` creates the `clingo.core.Library` used everywhere and always appends `--outf=no` (disables clingo's own output).
 - **`control.py`** — `Control` orchestrates the full pipeline: `add_program` → `ground` → `preprocess` → `prepare_solver` → `solve` (yields `WorldView` objects).
 - **`config.py`** — `AppConfig` holds all configuration: `eclingo_semantics` (`"g94"` or `"c19-1"`), `preprocessing_level`, `propagate`, `ignore_shows`.
 - **`grounder.py`** — `Grounder` parses ELP syntax into standard ASP via `parse_program`, then reifies the grounded program using `clingox.reify.Reifier`, producing `reified_facts: List[Symbol]`.
@@ -95,9 +95,11 @@ The solver implements a generate-and-test algorithm over reified programs:
 
 ### Key Conventions
 
+- **`clingo.core.Library`**: clingo 6 requires a library object for most operations. It is created only in `secondary_main` (`main.py`) and in the `setUp` methods of tests, and passed down as the `lib` argument. Symbols created from different `Library` objects are never equal.
+
 - **Reification**: The program is reified by `clingox.reify.Reifier`, producing facts like `rule/2`, `atom_tuple/2`, `literal_tuple/2`, `output/2` which the solver meta-encodings reason over.
 - **Symbolic atom prefix `u`**: All user atoms are wrapped as `u(atom)` during parsing to avoid name collisions with internal predicates.
 - **Epistemic atoms**: `&k{L}` becomes `k(u(L))` internally; `not1`/`not2` represent `not` / `not not` forms of the literal inside.
 - **Two semantics**: `"g94"` (default for CLI) applies double negation to epistemic literals during parsing; `"c19-1"` does not.
-- **Test separation**: `tests/` contains unit + integration tests; `helper_test/` contains shared test utilities. Files prefixed with `_test_` are disabled/draft tests.
+- **Test separation**: `tests/` contains unit + integration tests; `helper_test/` contains shared test utilities.
 - **Coverage threshold**: 99% required; `src/eclingo/__main__.py` and `src/eclingo/__init__.py` are excluded.
